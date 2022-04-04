@@ -1,0 +1,88 @@
+---
+title: "EDA"
+output: pdf_document
+date: '2022-04-07'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+pacman::p_load(R.matlab, stringr, tidyr, ggplot2, hexbin)
+
+```
+
+## questions
+1. What does each file represent -- Zero_Maze has 13 sub folders with binned_zscore and binned_behavior. Is each a mouse?   
+2. In the binned_behavior should each row have a 1 and a 0. Not 0,0. The mouse is either in the open arm or in the closed arm. There is no "other" option.   
+
+## notes --
+```binned_zscore.m``` = single cell recordings; col = each cell; row = each time  
+```binned_behavior.m``` = animal behavior
+
+Mouse Tasks:   
+- Elevated Zero Maze; col1 = closed arm; col2 = open arm  
+- Opposite Sex; col1 = interacting with male cup; col2 = interacting with female cup 
+- Direct Interaction; col1 = interacting; col2 = non-social behavior/ rearing
+
+
+# Zero Maze
+```{r}
+# read in our data
+prefix <- "Data/Zero_Maze/"
+folders <- list.files(prefix)
+
+for (f in folders){
+ #abbreviation for file name
+ f_abbr <- str_sub(f, -3, -1)
+ #subfolder
+ sub_f <- list.files(paste0(prefix, f, "/Day_1/Trial_001_0"))
+ 
+ #binned behavior
+ assign(paste0("bb_",f_abbr), 
+        readMat(paste0(prefix, f, "/Day_1/Trial_001_0/binned_behavior.mat")))
+ 
+ #z score
+ assign(paste0("bz_",f_abbr), 
+        readMat(paste0(prefix, f, "/Day_1/Trial_001_0/binned_zscore.mat")))
+  
+}
+```
+
+
+ If I understand the data layout correctly, there are 32 neurons that are being tracked
+ 
+```{r}
+
+## Example with sub folder 251
+x <- t(bb_251$binned.behavior)
+z <- data.frame(bz_251$binned.zscore)
+
+
+z$open <- x[,2]
+z$closed <- x[,1]
+z$time <- seq(1:nrow(z))
+
+z_long <- z %>% pivot_longer(cols = X1:X32)
+
+ggplot(data = z_long, mapping = aes(x = name, y = value, fill = as.factor(open)))+
+  geom_violin(position = position_dodge())+
+  labs(title = "Distributions of Neuron Z-Scores", fill = "Open?")+
+    theme(legend.position = "bottom")
+
+
+ggplot(data = z_long, mapping = aes(x = name, y = value))+
+  geom_bin_2d(show.legend = FALSE, bins = 25, drop= FALSE)+
+  scale_fill_viridis_c()+
+  labs(title = "Heatmap of Activation: Open = 1, Closed = 0", x = "Neuron", y = "Z-score")+
+  facet_wrap(vars(open), ncol = 1)+
+  theme(legend.position = "bottom")
+
+```
+
+```{r}
+x <- bb$binned.behavior
+x <- bz$binned.zscore
+
+```
+
+
