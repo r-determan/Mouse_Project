@@ -97,10 +97,27 @@ ggplot(data = bz_long, mapping = aes(x = name, y = value))+
 
 ```
 
+### Time Series Plot for Neurons
 ```{r}
-x <- bb$binned.behavior
-x <- bz$binned.zscore
+for (i in 1:32){index[i] <- paste0("X",i)}
 
+ggplot(z_long[z_long$name %in% index[1:10],])+
+  aes(x=time,y=value,group=name,color=name)+
+  geom_line()+
+  facet_wrap(~name,nrow=2)+
+  xlab("time")+ylab("activity level")+labs(color="neurons")
+
+ggplot(z_long[z_long$name %in% index[11:20],])+
+  aes(x=time,y=value,group=name,color=name)+
+  geom_line()+
+  facet_wrap(~name,nrow=2)+
+  xlab("time")+ylab("activity level")+labs(color="neurons")
+
+ggplot(z_long[z_long$name %in% index[21:32],])+
+  aes(x=time,y=value,group=name,color=name)+
+  geom_line()+
+  facet_wrap(~name,ncol=5)+
+  xlab("time")+ylab("activity level")+labs(color="neurons")
 ```
 
 
