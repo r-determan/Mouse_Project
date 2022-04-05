@@ -7,7 +7,7 @@ date: '2022-04-07'
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
-pacman::p_load(R.matlab, stringr, tidyr, ggplot2, hexbin)
+pacman::p_load(R.matlab, stringr, tidyr, ggplot2, hexbin, dplyr)
 
 ```
 
@@ -31,6 +31,7 @@ Mouse Tasks:
 prefix <- "Data/Zero_Maze/"
 folders <- list.files(prefix)
 
+bz_all <- NULL
 for (f in folders){
  #abbreviation for file name
  f_abbr <- str_sub(f, -3, -1)
@@ -38,21 +39,38 @@ for (f in folders){
  sub_f <- list.files(paste0(prefix, f, "/Day_1/Trial_001_0"))
  
  #binned behavior
- assign(paste0("bb_",f_abbr), 
-        readMat(paste0(prefix, f, "/Day_1/Trial_001_0/binned_behavior.mat")))
+ #assign(paste0("bb_",f_abbr), 
+ #        readMat(paste0(prefix, f, "/Day_1/Trial_001_0/binned_behavior.mat")))
  
  #z score
- assign(paste0("bz_",f_abbr), 
-        readMat(paste0(prefix, f, "/Day_1/Trial_001_0/binned_zscore.mat")))
+ #assign(paste0("bz_",f_abbr), 
+ #        readMat(paste0(prefix, f, "/Day_1/Trial_001_0/binned_zscore.mat")))
   
+ 
+ #import data
+  bb <- readMat(paste0(prefix, f, "/Day_1/Trial_001_0/binned_behavior.mat"))
+  bz <- readMat(paste0(prefix, f, "/Day_1/Trial_001_0/binned_zscore.mat"))
+ 
+ #extract dataframes from list
+  bb <- t(bb$binned.behavior)
+  bz <- data.frame(bz$binned.zscore)
+ 
+ #add behavior to zscore dataframe
+  bz$open <- bb[,2]
+  bz$closed <- bb[,1]
+ #add row number as time proxy
+  bz$time <- seq(1:nrow(bz))
+
+  #pivot long and add all data to a single dataframe
+  bz_long <- bz %>% pivot_longer(cols = -c(open, closed, time)) %>% mutate(df = f_abbr)
+  bz_all <- rbind(bz_all, bz_long)
 }
 ```
 
 
  If I understand the data layout correctly, there are 32 neurons that are being tracked
- 
-```{r}
 
+```{r}
 ## Example with sub folder 251
 x <- t(bb_251$binned.behavior)
 z <- data.frame(bz_251$binned.zscore)
@@ -64,14 +82,14 @@ z$time <- seq(1:nrow(z))
 
 z_long <- z %>% pivot_longer(cols = X1:X32)
 
-ggplot(data = z_long, mapping = aes(x = name, y = value, fill = as.factor(open)))+
-  geom_violin(position = position_dodge())+
-  labs(title = "Distributions of Neuron Z-Scores", fill = "Open?")+
-    theme(legend.position = "bottom")
+# ggplot(data = bz_long, mapping = aes(x = name, y = value, fill = as.factor(open)))+
+#   geom_violin(position = position_dodge())+
+#   labs(title = "Distributions of Neuron Z-Scores", fill = "Open?")+
+#     theme(legend.position = "bottom")
 
 
-ggplot(data = z_long, mapping = aes(x = name, y = value))+
-  geom_bin_2d(show.legend = FALSE, bins = 25, drop= FALSE)+
+ggplot(data = bz_long, mapping = aes(x = name, y = value))+
+  stat_bin2d(bins = 25, drop= TRUE, aes(fill = ..density..))+
   scale_fill_viridis_c()+
   labs(title = "Heatmap of Activation: Open = 1, Closed = 0", x = "Neuron", y = "Z-score")+
   facet_wrap(vars(open), ncol = 1)+
