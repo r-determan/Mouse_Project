@@ -40,15 +40,17 @@ for (f in folders){
  #subfolder
  sub_f <- list.files(paste0(prefix, f, "/Day_1/Trial_001_0"))
  
+ # MAKE EACH MOUSE IN ITS OWN VARIABLE
  #binned behavior
- #assign(paste0("bb_",f_abbr), 
- #        readMat(paste0(prefix, f, "/Day_1/Trial_001_0/binned_behavior.mat")))
+ assign(paste0("bb_",f_abbr), 
+         readMat(paste0(prefix, f, "/Day_1/Trial_001_0/binned_behavior.mat")))
  
  #z score
- #assign(paste0("bz_",f_abbr), 
- #        readMat(paste0(prefix, f, "/Day_1/Trial_001_0/binned_zscore.mat")))
+ assign(paste0("bz_",f_abbr), 
+         readMat(paste0(prefix, f, "/Day_1/Trial_001_0/binned_zscore.mat")))
   
  
+ # ADD ALL MICE TO SAME VARIABLE
  #import data
   bb <- readMat(paste0(prefix, f, "/Day_1/Trial_001_0/binned_behavior.mat"))
   bz <- readMat(paste0(prefix, f, "/Day_1/Trial_001_0/binned_zscore.mat"))
