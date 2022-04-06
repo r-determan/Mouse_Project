@@ -1,37 +1,53 @@
-library(R.matlab)
-binned_zscore <- readMat("Data/binned_zscore.mat")
-binned_zscore <- binned_zscore$binned.zscore
-dim(binned.zscore) ##6300*47
-binned_zscore2 <- readMat("Data/binned_zscore-2.mat")
-binned_zscore2 <- binned_zscore2$binned.zscore
-dim(binned_zscore2) ##6301*128
+#binned_zscore <- readMat("Data/binned_zscore.mat") ##6300*47
+# binned_zscore2 <- readMat("Data/binned_zscore-2.mat") ##6301*128
+# binned_behavior <- readMat("Data/binned_behavior.mat")##2*6300
+# binned_behavior2 <- readMat("Data/binned_behavior-2.mat")##2*6301
 
-binned_behavior <- readMat("Data/binned_behavior.mat")
-binned_behavior <- binned_behavior$binned_behavior
-dim(binned_behavior) ##2*6300
-binned_behavior2 <- readMat("Data/binned_behavior-2.mat")
-binned_behavior2 <- binned_behavior2$binned.behavior
-dim(binned_behavior2) ##2*6301
-
-########eda.rmd
+########eda.rmd###############################
 length(folders) ##13 files
 ## bb file & bz file are pairs. So there are 13 pairs.
 ## for each pair, their dims are different. So I guess each pair stands for one single mouse.
 ## violin plot can see the median value of all neurons, compare close and open level
+###### read data
+prefix <- "Data/Zero_Maze/"
+folders <- list.files(prefix)
+for (f in folders){
+#  f <- "616669_251"
+  f_abbr <- str_sub(f, -3, -1)
+  sub_f <- list.files(paste0(prefix, f, "/Day_1/Trial_001_0"))
+  assign(paste0("bb_",f_abbr), 
+          readMat(paste0(prefix, f, "/Day_1/Trial_001_0/binned_behavior.mat"))$binned.behavior)
+  assign(paste0("bz_",f_abbr),
+         readMat(paste0(prefix, f, "/Day_1/Trial_001_0/binned_zscore.mat"))$binned.zscore)
+}
 
-## QUESTION IS: do we need to remove the WIRED data (0,0)?
-st <- z ##check wired data
-st$check <- st[,33]+st[,34]
-length(which(st$check==0))##237 0&0
-length(which(st$check==2))##there is no 1&1
-(st %>% subset((st$check==0)))$time
+##### For example, mouse 251
+bb_251 <- data.frame(t(bb_251))
+bz_251 <- data.frame(bz_251)
+bz_251$open <- bb_251[,2]
+bz_251$closed <- bb_251[,1]
+bz_251$time <- seq(1:nrow(bz_251))
+bz_251_long <- bz_251 %>% pivot_longer(cols = -c(open, closed, time))
+## drop wired data & combined closed and open into 1 column
+bz_251_long_clean <- bz_251_long[-which(bz_251_long$open==0 & bz_251_long$closed==0),]
+bz_251_long_clean$Y <- NA
+bz_251_long_clean$Y[bz_251_long_clean$open==1] <- "open"
+bz_251_long_clean$Y[bz_251_long_clean$closed==1] <- "closed"
 
-## first thought: plot time series for each neurons
+## first thought: plot time series for each neurons, split by open/closed
+index <- NULL
 for (i in 1:32){index[i] <- paste0("X",i)}
-ggplot(z_long[z_long$name %in% index[1:10],])+
+ggplot(bz_251_long[bz_251_long$name %in% index[1:10],])+
   aes(x=time,y=value,group=name,color=name)+
   geom_line()+
-  facet_wrap(~name,nrow=2)+
-  xlab("time")+ylab("activity level")+labs(color="neurons")
+  facet_wrap(Y~name,nrow=2)+
+  xlab("time index")+ylab("zscore")+labs(color="neurons")
 
-## 
+## plot mean level for close and open, dropped wired data
+bz_251_long_clean_temp <- bz_251_long_clean[,3:ncol(bz_251_long_clean)] %>% group_by(Y,name) %>% summarise(avg=mean(value)) %>% arrange(name)
+
+ggplot(bz_251_long_clean_temp)+
+  geom_bar(aes(x=name,y=avg,fill=Y),stat = "identity",position="dodge")+
+  xlab("neurons")+ylab("average zscore")+labs(fill="behavior",title="folder 251")
+  
+

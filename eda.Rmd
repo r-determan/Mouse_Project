@@ -15,7 +15,7 @@ pacman::p_load(R.matlab, stringr, tidyr, ggplot2, hexbin, dplyr, reshape2)
 1. What does each file represent -- Zero_Maze has 13 sub folders with binned_zscore and binned_behavior. Is each a mouse?   Yes.
 2. In the binned_behavior should each row have a 1 and a 0. Not 0,0. The mouse is either in the open arm or in the closed arm. There is no "other" option. (0&0 is because program lost track of mouse. Just remove them.)
 3. Column one of binned zscore does not always represent the same cell. They recorded from different number of cells in each animal. For folders of the same animals between different behaviors, they were recorded on different days.
-4. For same animals, are recording independent or time series?
+4. For same animals, are recording independent or time series? (time series)
 
 ## notes --
 ```binned_zscore.m``` = single cell recordings; col = each cell; row = each time  
