@@ -144,3 +144,50 @@ ggplot(z_long_clean_temp)+
 After dropped 0&0 data, I split them into 2 groups, open & closed, and then calculated average zscore for each neuron, drew bar plot.
 
 From this plot, we can see some neurons show more active in closed arm than in open arm, while other neurons are opposite, so we can assume some neurons has different working patterns.
+
+### Jessie's part
+```{r}
+x <- t(bb_251$binned.behavior)
+z <- data.frame(bz_251$binned.zscore)
+
+z$open <- x[,2]
+z$closed <- x[,1]
+z$time <- seq(1:nrow(z))
+
+bz_251_long <- z %>% pivot_longer(cols = -c(open, closed, time))
+
+## drop wired data & combined closed and open into 1 column
+bz_251_long_clean <- bz_251_long[-which(bz_251_long$open==0 & bz_251_long$closed==0),]
+bz_251_long_clean$Y <- NA
+bz_251_long_clean$Y[bz_251_long_clean$open==1] <- "open"
+bz_251_long_clean$Y[bz_251_long_clean$closed==1] <- "closed"
+
+
+# clear difference in heatmap and mean barplot
+index <- NULL
+for (i in 1:32){index[i] <- paste0("X",i)}
+target <- c(29,25,30,17)
+
+# clearly different z-score plot in the time series
+
+ggplot(bz_251_long_clean[bz_251_long_clean$name %in% index[target],])+
+  aes(x=time,y=value,group=name,color=name)+
+  geom_line()+
+  facet_wrap(Y~name,nrow=2)+
+  theme_minimal()+
+  xlab("time index")+ylab("zscore")+labs(color="neurons")
+
+
+# clearly different z-score plot in density
+
+ggplot(bz_251_long_clean[bz_251_long_clean$name %in% index[target],])+ 
+  aes(value,color=Y,fill=Y)+ geom_density(alpha = 0.3) +
+  scale_fill_brewer(palette="Dark2") +
+  scale_color_brewer(palette="Dark2") +
+  facet_wrap(~name,nrow=2)+
+  theme_minimal()+
+  labs(x = "", y = "density")
+
+
+```
+
