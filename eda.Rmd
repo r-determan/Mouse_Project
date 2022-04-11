@@ -72,9 +72,6 @@ for (f in folders){
 ```
 
 ## Example with sub folder 251
-
- If I understand the data layout correctly, there are 32 neurons that are being tracked
-
 ```{r}
 x <- t(bb_251$binned.behavior)
 z <- data.frame(bz_251$binned.zscore)
@@ -86,10 +83,12 @@ z$time <- seq(1:nrow(z))
 
 z_long <- z %>% pivot_longer(cols = X1:X32)
 
-# ggplot(data = bz_long, mapping = aes(x = name, y = value, fill = as.factor(open)))+
-#   geom_violin(position = position_dodge())+
-#   labs(title = "Distributions of Neuron Z-Scores", fill = "Open?")+
-#     theme(legend.position = "bottom")
+
+ggplot(data = z_long, mapping = aes(x = open, y = value, fill = as.factor(open)))+
+   geom_jitter(alpha = 0.01)+
+   geom_violin(position = position_dodge())+
+   labs(title = "Distributions of Neuron Z-Scores", fill = "Open?")+
+     theme(legend.position = "bottom")
 
 
 ggplot(data = bz_long, mapping = aes(x = name, y = value))+
@@ -100,6 +99,40 @@ ggplot(data = bz_long, mapping = aes(x = name, y = value))+
   theme(legend.position = "bottom")
 
 ```
+
+
+```{r, fig.width=16, fig.height=9}
+sample <- bz_all %>% filter(df == 251)
+set.seed(411)
+lgc <- sample(c(TRUE, FALSE), size = length(unique(sample$name)), prob = c(0.20, 0.8), replace = TRUE)
+
+sample2 <- sample %>% filter(name == unique(sample$name)[lgc])
+
+ggplot(data =sample2)+
+  geom_hline(mapping = aes(yintercept = 0, color = "gray"))+
+  geom_line(mapping = aes(x = time, y = value, group = name, color = as.factor(open)), alpha = 0.35)+
+  labs(title= "Neuron Activity for Mouse 251", subtitle = paste("Selected Neurons", unique(sample2$name)), y = "Z-score", color = "Open?")+
+  facet_wrap(vars(df))+theme(legend.position = "bottom")
+
+
+
+z_long %>%filter(name == "X30") %>%  ggplot()+
+  geom_hline(mapping = aes(yintercept = 0, color = "gray"))+
+  geom_line(mapping = aes(x = time, y = value, group = name, colour = as.factor(open)))+
+  labs(title = "Mouse 251: Neuron X30")
+
+
+z_long %>%filter(name == "X1") %>%  ggplot()+
+  geom_hline(mapping = aes(yintercept = 0, color = "gray"))+
+  geom_line(mapping = aes(x = time, y = value, group = name, colour = as.factor(open)))+
+  labs(title = "Mouse 251: Neuron X1")
+
+
+
+
+```
+
+
 
 ### Time Series Plot for Neurons(not consider about behavior)
 ```{r}
