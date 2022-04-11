@@ -1,7 +1,7 @@
 ---
 title: "EDA"
 output: pdf_document
-date: '2022-04-07'
+date: '`r Sys.Date()`'
 ---
 
 ```{r setup, include=FALSE}
@@ -136,6 +136,7 @@ z_long %>%filter(name == "X1") %>%  ggplot()+
 
 ### Time Series Plot for Neurons(not consider about behavior)
 ```{r}
+index <- NULL
 for (i in 1:32){index[i] <- paste0("X",i)}
 
 ggplot(z_long[z_long$name %in% index[1:10],])+
@@ -220,7 +221,5 @@ ggplot(bz_251_long_clean[bz_251_long_clean$name %in% index[target],])+
   facet_wrap(~name,nrow=2)+
   theme_minimal()+
   labs(x = "", y = "density")
-
-
 ```
 
