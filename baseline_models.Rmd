@@ -3,17 +3,17 @@ title: "Models"
 output: html_notebook
 ---
 ```{r setup}
-pacman::p_load(R.matlab)
+pacman::p_load(R.matlab, dplyr)
 ```
 
 # Data Setup/ Import
 ```{r}
 # Import mouse 251 data
-bb <- readMat("Data/Zero_Maze/616669_251/Day_1/Trial_001_0/binned_behavior.mat")
+bb <- readMat("Data/Zero_Maze/608034_409/Day_1/Trial_001_0/binned_behavior.mat")
 bb <- data.frame(t(bb$binned.behavior))
 names(bb) <- c("open", "closed")
 
-bz <- readMat("Data/Zero_Maze/616669_251/Day_1/Trial_001_0/binned_zscore.mat")
+bz <- readMat("Data/Zero_Maze/608034_409/Day_1/Trial_001_0/binned_zscore.mat")
 bz <- data.frame(bz$binned.zscore)
 
 data <- data.frame(cbind(bb, bz))
@@ -24,5 +24,16 @@ data_clean <- data[-which(data$open==0 & data$closed==0),]
 rm(bb, bz, data)
 ```
 
+```{r}
+
+mdl_data <- data_clean %>% select(-closed)
+
+sample <- sample(2:ncol(mdl_data), size = 10)
+
+glm(open~., data = mdl_data[,c(1,sample)], family = binomial(link = "logit"))
+
+
+mdl_data[,sample]
+```
 
 
