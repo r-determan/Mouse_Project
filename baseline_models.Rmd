@@ -3,7 +3,7 @@ title: "Models"
 output: html_notebook
 ---
 ```{r setup}
-pacman::p_load(R.matlab, dplyr)
+pacman::p_load(R.matlab, dplyr, caret)
 ```
 
 # Data Setup/ Import
@@ -28,12 +28,29 @@ rm(bb, bz, data)
 
 mdl_data <- data_clean %>% select(-closed)
 
-sample <- sample(2:ncol(mdl_data), size = 10)
+a <- NULL
+for (i in 1:100){
+  for (s in c(1,5,25,50,100)){
+  sample <- sample(2:ncol(mdl_data), size = s)
+  train <- sample(c(TRUE, FALSE), size = nrow(mdl_data), replace = TRUE)
+  train_data <- mdl_data[train, c(1,sample)]
+  test_data <- mdl_data[!train, c(1,sample)]
+  mdl <- glm(open~., data = train_data, family = binomial(link = "logit"))
+  pred <- predict(mdl, test_data, type = "response") 
+  pred <- factor(ifelse(pred>=0.5, 1, 0), levels = c(1,0))
+  cm <- confusionMatrix(data = pred, reference = factor(test_data$open, levels = c(1,0)))
+  a <- rbind(a,c(cm$overall["Accuracy"], s) )
+  }
+  #print(i)
+}
+a <- data.frame(a)
 
-glm(open~., data = mdl_data[,c(1,sample)], family = binomial(link = "logit"))
+ggplot(data = a)+
+  geom_histogram(mapping = aes(x = Accuracy))+
+  facet_wrap(vars(V2))
 
-
-mdl_data[,sample]
+means <- a %>% group_by(V2) %>% summarise(mean = mean(Accuracy)) 
+means[which.max(means$mean),]
 ```
 
 
