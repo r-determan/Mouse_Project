@@ -73,4 +73,10 @@ summary(mdl_logis)
 pred_logis <- predict(mdl_logis, newdata = testing)
 error_rate <- mean((pred_logis>.5 & testing$open == 0) | (pred_logis<.5 & testing$open == 1))
 error_rate
+## visualize: confusion matrix, ROC curve ##
+library(pROC)
+logisROC <- roc(testing$open, pred_logis)
+plot(logisROC, print.auc=TRUE, auc.polygen=TRUE)
+
+
 

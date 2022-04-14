@@ -3,7 +3,7 @@ title: "Models"
 output: html_notebook
 ---
 ```{r setup}
-pacman::p_load(R.matlab, dplyr, caret, factoextra)
+pacman::p_load(R.matlab, dplyr, caret, factoextra, FactoMineR, pROC)
 ```
 
 # Data Setup/ Import
@@ -60,6 +60,7 @@ mdl_data.pca <- PCA(mdl_data[,-1], scale.unit = TRUE, ncp=40, graph = FALSE)
 eigenvalue <- get_eigenvalue(mdl_data.pca) #80:95.6%; 60:90%; 40: 80.8%
 # extract principal components
 comp <- data.frame(mdl_data.pca$ind$coord)
+dim(mdl_data.pca$ind$contrib)
 # fit model
 comp$open <- mdl_data$open
 train <- sample(1:nrow(comp), size = round(.8*nrow(comp)), replace = FALSE)
@@ -70,5 +71,11 @@ summary(mdl_logis)
 pred_logis <- predict(mdl_logis, newdata = testing)
 error_rate <- mean((pred_logis>.5 & testing$open == 0) | (pred_logis<.5 & testing$open == 1))
 error_rate
+```
+
+## ROC Curve
+```{r}
+logisROC <- roc(testing$open, pred_logis)
+plot(logisROC, print.auc=TRUE, auc.polygen=TRUE)
 ```
 
