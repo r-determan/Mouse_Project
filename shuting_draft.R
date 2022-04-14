@@ -37,7 +37,7 @@ bz_251_long_clean$Y[bz_251_long_clean$closed==1] <- "closed"
 ## first thought: plot time series for each neurons, split by open/closed
 index <- NULL
 for (i in 1:32){index[i] <- paste0("X",i)}
-ggplot(bz_251_long[bz_251_long$name %in% index[1:10],])+
+ggplot(bz_251_long_clean[bz_251_long_clean$name %in% index[1:10],])+
   aes(x=time,y=value,group=name,color=name)+
   geom_line()+
   facet_wrap(Y~name,nrow=2)+
@@ -48,6 +48,29 @@ bz_251_long_clean_temp <- bz_251_long_clean[,3:ncol(bz_251_long_clean)] %>% grou
 
 ggplot(bz_251_long_clean_temp)+
   geom_bar(aes(x=name,y=avg,fill=Y),stat = "identity",position="dodge")+
-  xlab("neurons")+ylab("average zscore")+labs(fill="behavior",title="folder 251")
+  xlab("neurons")+ylab("average zscore")+labs(fill="behavior",title="mouse 251 in Zero_Maze experiment")
   
+#################### Fit Simple Model ##################
+
+#step1: dimension reduction
+#use baseline_models.Rmd's mdl_data
+library(FactoMineR)
+library(factoextra)
+mdl_data.pca <- PCA(mdl_data[,-1], scale.unit = TRUE, ncp=40, graph = FALSE)
+get_eigenvalue(mdl_data.pca) #80:95.6%; 60:90%; 40: 80.8%
+fviz_eig(mdl_data.pca) #visualize contribution
+var <- get_pca_var(mdl_data.pca) #contrib is contribution of pc
+ind <- get_pca_ind(mdl_data.pca) ##what's the difference?
+fviz_contrib(mdl_data.pca, choice = "var", axes = 1, top = 10) #visualize contribution to pc1
+#pca <- prcomp(mdl_data[,-1], scale. = TRUE) #same with PCA()
+comp <- data.frame(mdl_data.pca$ind$coord)
+comp$open <- mdl_data$open
+train <- sample(1:nrow(comp), size = round(.8*nrow(comp)), replace = FALSE)
+training <- comp[train,]
+testing <- comp[-train,]
+mdl_logis <- glm(open~., data = training, family = binomial("logit"))
+summary(mdl_logis)
+pred_logis <- predict(mdl_logis, newdata = testing)
+error_rate <- mean((pred_logis>.5 & testing$open == 0) | (pred_logis<.5 & testing$open == 1))
+error_rate
 
