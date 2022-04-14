@@ -54,15 +54,17 @@ means <- a %>% group_by(V2) %>% summarise(mean = mean(Accuracy))
 means[which.max(means$mean),]
 ```
 
-## Logistic Model Combined With PCA
+## Logistic Model Combined With PCA (components = 40)
 ```{r}
-mdl_data.pca <- PCA(mdl_data[,-1], scale.unit = TRUE, ncp=40, graph = FALSE)
+mdl_data.pca <- PCA(mdl_data[,-1], scale.unit = TRUE, ncp=40, graph = FALSE) #set graph=TRUE can see the arrow plot
 eigenvalue <- get_eigenvalue(mdl_data.pca) #80:95.6%; 60:90%; 40: 80.8%
+
 # extract principal components
 comp <- data.frame(mdl_data.pca$ind$coord)
-dim(mdl_data.pca$ind$contrib)
+
 # fit model
 comp$open <- mdl_data$open
+set.seed(1)
 train <- sample(1:nrow(comp), size = round(.8*nrow(comp)), replace = FALSE)
 training <- comp[train,]
 testing <- comp[-train,]
@@ -77,5 +79,23 @@ error_rate
 ```{r}
 logisROC <- roc(testing$open, pred_logis)
 plot(logisROC, print.auc=TRUE, auc.polygen=TRUE)
+```
+
+### Construct a Function to Compare Different Number of Components
+```{r}
+error_rate <- NULL
+for (i in 1:(ncol(mdl_data)-1)){
+  mdl_data.pca <- PCA(mdl_data[,-1], scale.unit = TRUE, ncp=i, graph = FALSE)
+  comp <- data.frame(mdl_data.pca$ind$coord)
+  comp$open <- mdl_data$open
+  set.seed(1)
+  train <- sample(1:nrow(comp), size = round(.8*nrow(comp)), replace = FALSE)
+  training <- comp[train,]
+  testing <- comp[-train,]
+  mdl_logis <- glm(open~., data = training, family = binomial("logit"))
+  pred_logis <- predict(mdl_logis, newdata = testing)
+  error_rate[i] <- mean((pred_logis>.5 & testing$open == 0) | (pred_logis<.5 & testing$open == 1))
+}
+plot(x=1:111, y=error_rate, type = "l", xlab="Number of Principal Components", col="blue")
 ```
 

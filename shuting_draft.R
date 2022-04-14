@@ -63,6 +63,8 @@ var <- get_pca_var(mdl_data.pca) #contrib is contribution of pc
 ind <- get_pca_ind(mdl_data.pca) ##what's the difference?
 fviz_contrib(mdl_data.pca, choice = "var", axes = 1, top = 10) #visualize contribution to pc1
 #pca <- prcomp(mdl_data[,-1], scale. = TRUE) #same with PCA()
+
+#step2: fit logistic model
 comp <- data.frame(mdl_data.pca$ind$coord)
 comp$open <- mdl_data$open
 train <- sample(1:nrow(comp), size = round(.8*nrow(comp)), replace = FALSE)
