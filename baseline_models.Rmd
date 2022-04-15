@@ -8,7 +8,7 @@ pacman::p_load(R.matlab, dplyr, caret, factoextra, FactoMineR, pROC)
 
 # Data Setup/ Import
 ```{r}
-# Import mouse 251 data
+# Import mouse 409 data
 bb <- readMat("Data/Zero_Maze/608034_409/Day_1/Trial_001_0/binned_behavior.mat")
 bb <- data.frame(t(bb$binned.behavior))
 names(bb) <- c("open", "closed")
