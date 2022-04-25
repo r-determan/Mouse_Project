@@ -7,20 +7,25 @@ date: '2022-04-20'
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 pacman::p_load(tidyr, dplyr, keras, caret)
+
 source("mouse409.R")
 ```
+
+
+
+
+
 
 *Based on page 455... in ISLR Book*
 
 ```{r}
-n_neurons <- 100
+n_neurons <- 25
 n_lags <- 5
-
-epochs <- 200
+epochs <- 50
 
 
 #data_mat <- data.matrix(data_clean %>% select(-closed))
-xdata <- data.matrix(data_clean %>% select(-c(open, closed)) %>% select(1:3))
+xdata <- data.matrix(data_clean %>% select(-c(open, closed)) %>% select(1:25))
 ydata <- data.matrix(data_clean %>% select(open))
 
 
@@ -50,6 +55,8 @@ ydata <- ydata[-(1:n_lags)]
 n <- nrow ( arframe )
 #select only neuron data, including lags -- exclude "open"
 xrnn <- data.matrix ( arframe [ , -1])
+write.csv(arframe, "processedx.csv")
+
 dim(xrnn)
 xrnn <- array ( xrnn , c (n , n_neurons , n_lags) )  #format to n rows; number of neurons columns; number of lags layers
 dim(xrnn)
@@ -58,15 +65,26 @@ xrnn <- xrnn [ , , n_lags:1] #reorder columns
 #aperm = Transpose an array by permuting its dimensions and optionally resizing it.
 #he final step rearranges the coordinates of the array (like a partial transpose) into the format that the RNN module in keras expects
 xrnn <- aperm ( xrnn , c (1 , 3 , 2) )
+
 dim ( xrnn )
 
+
+write.csv(arframe[, "open"], "processedy.csv")
+
+getwd()
+```
+
+
+```{r}
 model <- keras_model_sequential () %>%
-  layer_simple_rnn ( units = 16 , 
+  layer_simple_rnn ( units = 100 , 
                      input_shape = list (n_lags , n_neurons) ,
                      dropout = 0.1 , recurrent_dropout = 0.1) %>%
+  layer_dense ( units = 50, activation = "relu") %>% 
   layer_dense ( units = 1, activation = "sigmoid")
 model %>% compile ( optimizer = optimizer_rmsprop() ,
-                    loss = "binary_crossentropy" )
+                    loss = "binary_crossentropy",
+                    metrics = c("accuracy") )
 
 
 history <- model %>% 
@@ -82,6 +100,3 @@ kpred <- factor(round(kpred,0))
 confusionMatrix(kpred, y_true)
 
 ```
-
-
-
