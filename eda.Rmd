@@ -69,6 +69,8 @@ for (f in folders){
   bz_long <- bz %>% pivot_longer(cols = -c(open, closed, time)) %>% mutate(df = f_abbr)
   bz_all <- rbind(bz_all, bz_long)
 }
+
+rm(bz_long)
 ```
 
 ## Example with sub folder 251

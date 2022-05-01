@@ -3,7 +3,7 @@ title: "Models"
 output: html_notebook
 ---
 ```{r setup}
-pacman::p_load(R.matlab, dplyr, caret, factoextra, FactoMineR, pROC)
+pacman::p_load(R.matlab, dplyr,tidyr, caret, factoextra, FactoMineR, pROC,stringr)
 ```
 
 # Data Setup/ Import
@@ -17,6 +17,7 @@ bz <- readMat("Data/Zero_Maze/608034_409/Day_1/Trial_001_0/binned_zscore.mat")
 bz <- data.frame(bz$binned.zscore)
 
 data <- data.frame(cbind(bb, bz))
+
 data$time <- seq(1:nrow(data))
   
 data_clean <- data[-which(data$open==0 & data$closed==0),]
@@ -30,33 +31,62 @@ rm(bb, bz, data)
 mdl_data <- data_clean %>% select(-closed)
 
 a <- NULL
+ba <- NULL
+#for 100 repetitions
 for (i in 1:100){
+  #select a sample size of s cells
   for (s in c(1,5,25,50,100)){
+    
+  #select columns
   sample <- sample(2:ncol(mdl_data), size = s)
-  train <- sample(c(TRUE, FALSE), size = nrow(mdl_data), replace = TRUE)
+  
+  #split taining and testing data
+  train <- sample(c(TRUE, FALSE), size = nrow(mdl_data), prob = c(0.7,0.3), replace = TRUE)
   train_data <- mdl_data[train, c(1,sample)]
   test_data <- mdl_data[!train, c(1,sample)]
+  
+  #fit model
   mdl <- glm(open~., data = train_data, family = binomial(link = "logit"))
+  
+  #predict
   pred <- predict(mdl, test_data, type = "response") 
   pred <- factor(ifelse(pred>=0.5, 1, 0), levels = c(1,0))
+  
+  #confusion matrix and accuracy
   cm <- confusionMatrix(data = pred, reference = factor(test_data$open, levels = c(1,0)))
+  
   a <- rbind(a,c(cm$overall["Accuracy"], s) )
+  ba <- rbind(ba,c(cm$byClass["Balanced Accuracy"], s) )
   }
   #print(i)
 }
 a <- data.frame(a)
+ba <- data.frame(ba)
 
 ggplot(data = a)+
   geom_histogram(mapping = aes(x = Accuracy))+
   facet_wrap(vars(V2))
 
-means <- a %>% group_by(V2) %>% summarise(mean = mean(Accuracy)) 
-means[which.max(means$mean),]
+
+ggplot(data = ba)+
+  geom_histogram(mapping = aes(x = Balanced.Accuracy))+
+  facet_wrap(vars(V2))
+
+
+
+means <- a %>% group_by(V2) %>% summarise(acc_mean = mean(Accuracy)) 
+means[which.max(means$acc_mean),]
+
+
+
+
+means <- ba %>% group_by(V2) %>% summarise(balacc_mean = mean(Balanced.Accuracy)) 
+means[which.max(means$balacc_mean),]
 ```
 
 ## Logistic Model Combined With PCA (components = 40)
 ```{r}
-mdl_data.pca <- PCA(mdl_data[,-1], scale.unit = TRUE, ncp=40, graph = FALSE) #set graph=TRUE can see the arrow plot
+mdl_data.pca <- PCA(mdl_data[,-1], scale.unit = TRUE, ncp=40, graph = TRUE) #set graph=TRUE can see the arrow plot
 eigenvalue <- get_eigenvalue(mdl_data.pca) #80:95.6%; 60:90%; 40: 80.8%
 
 # extract principal components
@@ -78,7 +108,8 @@ error_rate
 ## ROC Curve
 ```{r}
 logisROC <- roc(testing$open, pred_logis)
-plot(logisROC, print.auc=TRUE, auc.polygen=TRUE)
+plot(logisROC)
+
 ```
 
 ### Construct a Function to Compare Different Number of Components
@@ -98,4 +129,97 @@ for (i in 1:(ncol(mdl_data)-1)){
 }
 plot(x=1:111, y=error_rate, type = "l", xlab="Number of Principal Components", col="blue")
 ```
+
+
+# PCA for ALL MICE
+```{r}
+# read in our data
+prefix <- "Data/Zero_Maze/"
+folders <- list.files(prefix)
+
+bz_all <- NULL
+for (f in folders){
+ #abbreviation for file name
+ f_abbr <- str_sub(f, -3, -1)
+ #subfolder
+ sub_f <- list.files(paste0(prefix, f, "/Day_1/Trial_001_0"))
+ 
+ # # MAKE EACH MOUSE IN ITS OWN VARIABLE
+ # #binned behavior
+ # assign(paste0("bb_",f_abbr), 
+ #         readMat(paste0(prefix, f, "/Day_1/Trial_001_0/binned_behavior.mat")))
+ # 
+ # #z score
+ # assign(paste0("bz_",f_abbr), 
+ #         readMat(paste0(prefix, f, "/Day_1/Trial_001_0/binned_zscore.mat")))
+  
+ 
+ # ADD ALL MICE TO SAME VARIABLE
+ #import data
+  bb <- readMat(paste0(prefix, f, "/Day_1/Trial_001_0/binned_behavior.mat"))
+  bz <- readMat(paste0(prefix, f, "/Day_1/Trial_001_0/binned_zscore.mat"))
+ 
+ #extract dataframes from list
+  bb <- t(bb$binned.behavior)
+  bz <- data.frame(bz$binned.zscore)
+ 
+ #add behavior to zscore dataframe
+  bz$open <- bb[,2]
+  bz$closed <- bb[,1]
+ #add row number as time proxy
+  bz$time <- seq(1:nrow(bz))
+
+  #pivot long and add all data to a single dataframe
+  bz_long <- bz %>% pivot_longer(cols = -c(open, closed, time)) %>% mutate(df = f_abbr)
+  bz_all <- rbind(bz_all, bz_long)
+}
+
+rm(bz_long, f, f_abbr,folders, prefix, sub_f, bb, bz)
+
+
+bz_all <- bz_all[-which(bz_all$open==0 & bz_all$closed==0),]
+bz_all <- bz_all %>% select(-closed)
+
+```
+
+```{r}
+plt <- ggplot()
+plt <- NULL
+for (id in unique(bz_all$df)){
+  print(id)
+  mdl_data <- bz_all %>% filter(df == id) %>% pivot_wider() %>% select(-c(df,time))
+  
+  mdl_data.pca <- PCA(mdl_data[,-1], scale.unit = TRUE, ncp=10, graph = FALSE) #set graph=TRUE can see the arrow plot
+  eigenvalue <- get_eigenvalue(mdl_data.pca) #80:95.6%; 60:90%; 40: 80.8%
+  
+  # extract principal components
+  comp <- data.frame(mdl_data.pca$ind$coord)
+  
+  # fit model
+  comp$open <- mdl_data$open
+  
+  set.seed(1)
+  train <- sample(1:nrow(comp), size = round(.8*nrow(comp)), replace = FALSE)
+  training <- comp[train,]
+  testing <- comp[-train,]
+  
+  mdl_logis <- glm(open~., data = training, family = binomial("logit"))
+  
+  summary(mdl_logis)
+  pred_logis <- predict(mdl_logis, newdata = testing)
+  error_rate <- mean((pred_logis>.5 & testing$open == 0) | (pred_logis<.5 & testing$open == 1))
+  print(error_rate)
+  
+  logisROC <- roc(testing$open, pred_logis)
+  assign(paste0("roc_",id),logisROC) 
+}
+
+ggroc(list("251" = roc_251, "254" = roc_254,
+           "255" = roc_255, "256" = roc_256,
+           "274" = roc_274, "409" = roc_409,
+           "412" = roc_412, "414" = roc_414,
+           "416" = roc_416,
+           "417" = roc_417, "418" = roc_418))
+```
+
 
