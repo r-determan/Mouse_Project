@@ -18,12 +18,12 @@ source("mouse409.R")
 *Based on page 455... in ISLR Book*
 
 ```{r}
-n_neurons <- 75
-n_lags <- 10
+n_neurons <- 
+n_lags <- 5
 epochs <- 50
 
 #data_mat <- data.matrix(data_clean %>% select(-closed))
-xdata <- data.matrix(data_clean %>% select(-c(open, closed)) %>% select(1:75))
+xdata <- data.matrix(data_clean %>% select(-c(open, closed)) %>% select(1:25))
 ydata <- data.matrix(data_clean %>% select(open))
 #create lag function
 lagm <- function (x, k = 1) {
@@ -35,18 +35,18 @@ lagm <- function (x, k = 1) {
 arframe <- data.frame ( open = ydata ,
 L1 = lagm ( xdata , 1) , L2 = lagm ( xdata , 2),
 L3 = lagm ( xdata , 3) , L4 = lagm ( xdata , 4) ,
-L5 = lagm ( xdata , 5),  L6 = lagm ( xdata , 6) , 
-L7 = lagm ( xdata , 7),
-L8 = lagm ( xdata , 8) , L9 = lagm ( xdata , 9) ,
-L10 = lagm ( xdata , 10)
+L5 = lagm ( xdata , 5)
 )
 #separate train and test
 #istrain <- sample(c(TRUE, FALSE), size = nrow(arframe), replace = TRUE, prob = c(.7,.3))
 
 
-istrain <- rep(TRUE, round(nrow(arframe)*0.7))
-istrain <- c(istrain, rep(FALSE,nrow(arframe)-round(nrow(arframe)*0.7)))
+istrain <- rep(TRUE, round(nrow(arframe)*0.7/3))
+istrain <- c(istrain, rep(FALSE,nrow(arframe)/3-round(nrow(arframe)*0.7/3)))
+istrain <- c(istrain, istrain,istrain, FALSE)
 
+
+nrow(arframe) ==length(istrain)
 ```
 
 ```{r}
@@ -76,14 +76,14 @@ model <- keras_model_sequential () %>%
   layer_simple_rnn ( units = 100 , 
                      input_shape = list (n_lags , n_neurons) ,
                      activation = "relu") %>%
-  #layer_dense ( units = 50, activation = "relu") %>% 
+  layer_dense ( units = 50, activation = "relu") %>% 
   layer_dense ( units = 1, activation = "sigmoid")
 model %>% compile ( optimizer = optimizer_rmsprop() ,
                     loss = "binary_crossentropy",
                     metrics = c("accuracy") )
 history <- model %>% 
   fit(xrnn[ istrain , , ] , arframe[ istrain , "open" ] ,
-       batch_size = 64 , epochs = epochs ,
+       batch_size = 2 , epochs = epochs ,
        validation_data = list ( xrnn [! istrain , , ] , arframe [! istrain , "open" ])
 )
 kpred <- predict ( model , xrnn [! istrain , , ])
@@ -94,6 +94,14 @@ confusionMatrix(kpred, y_true)
 
 
 sum(arframe[ istrain , "open" ])/length(arframe[ istrain , "open" ])
-
 sum(arframe[ !istrain , "open" ])/length(arframe[ !istrain , "open" ])
 ```
+
+# Next steps 
+val_accuracy: 0.8512 lag=10 75n, without 2nd relu layer
+val_accuracy: 0.8625 lag = 5 75n, without 2nd relu layer
+val_accuracy: 0.8340 lag = 5 75n, with 2nd relu layer
+
+- try implementing PCA then use PCs as input for model
+- try train,test,train,test
+- try random forest similar 

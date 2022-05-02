@@ -1,0 +1,223 @@
+---
+title: "Summary_of_Work"
+output: html_document
+date: '2022-05-02'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+pacman::p_load(R.matlab, dplyr,tidyr, caret, factoextra, FactoMineR, pROC,stringr,cvms)
+```
+
+
+# Data Pre-processing
+```{r}
+# Import mouse 409 data
+bb <- readMat("Data/Zero_Maze/608034_409/Day_1/Trial_001_0/binned_behavior.mat")
+bb <- data.frame(t(bb$binned.behavior))
+names(bb) <- c("open", "closed")
+bz <- readMat("Data/Zero_Maze/608034_409/Day_1/Trial_001_0/binned_zscore.mat")
+bz <- data.frame(bz$binned.zscore)
+
+#combine zscore and behavior
+data <- data.frame(cbind(bb, bz))
+data$time <- seq(1:nrow(data))
+  
+#remove rows where no location is coded
+data_clean <- data[-which(data$open==0 & data$closed==0),]
+
+#select only "open" column as indicator
+mdl_data <- data_clean %>% select(-closed)
+
+#remove extra variables
+rm(bb, bz, data)
+```
+
+```{r}
+# Import all mice data into one data frame
+# read in our data
+prefix <- "Data/Zero_Maze/"
+folders <- list.files(prefix)
+
+bz_all <- NULL
+for (f in folders){
+ #abbreviation for file name
+ f_abbr <- str_sub(f, -3, -1)
+ #subfolder
+ sub_f <- list.files(paste0(prefix, f, "/Day_1/Trial_001_0"))
+ 
+ # # MAKE EACH MOUSE IN ITS OWN VARIABLE
+ # #binned behavior
+ # assign(paste0("bb_",f_abbr), 
+ #         readMat(paste0(prefix, f, "/Day_1/Trial_001_0/binned_behavior.mat")))
+ # 
+ # #z score
+ # assign(paste0("bz_",f_abbr), 
+ #         readMat(paste0(prefix, f, "/Day_1/Trial_001_0/binned_zscore.mat")))
+  
+ 
+ # ADD ALL MICE TO SAME VARIABLE
+ #import data
+  bb <- readMat(paste0(prefix, f, "/Day_1/Trial_001_0/binned_behavior.mat"))
+  bz <- readMat(paste0(prefix, f, "/Day_1/Trial_001_0/binned_zscore.mat"))
+ 
+ #extract dataframes from list
+  bb <- t(bb$binned.behavior)
+  bz <- data.frame(bz$binned.zscore)
+ 
+ #add behavior to zscore dataframe
+  bz$open <- bb[,2]
+  bz$closed <- bb[,1]
+ #add row number as time proxy
+  bz$time <- seq(1:nrow(bz))
+
+  #pivot long and add all data to a single dataframe
+  bz_long <- bz %>% pivot_longer(cols = -c(open, closed, time)) %>% mutate(df = f_abbr)
+  bz_all <- rbind(bz_all, bz_long)
+}
+
+#remove extra variables
+rm(bz_long, f, f_abbr,folders, prefix, sub_f, bb, bz)
+
+#select rows were location is coded and select only open column
+bz_all <- bz_all[-which(bz_all$open==0 & bz_all$closed==0),]
+bz_all <- bz_all %>% select(-closed)
+
+```
+
+
+
+# Baseline Model: Logistic Regression 
+
+## Logistic Regression with Random Neuron Selection
+
+
+## Logistic Regression with PCA
+
+### For Mouse 409
+```{r}
+n_pc <- 10
+mdl_data.pca <- PCA(mdl_data[,-1], scale.unit = TRUE, ncp=n_pc, graph = TRUE) #set graph=TRUE can see the arrow plot
+eigenvalue <- get_eigenvalue(mdl_data.pca) #80:95.6%; 60:90%; 40: 80.8%
+
+
+# extract principal components
+comp <- data.frame(mdl_data.pca$ind$coord)
+
+# fit model
+comp$open <- mdl_data$open
+set.seed(1)
+train <- sample(1:nrow(comp), size = round(.8*nrow(comp)), replace = FALSE)
+training <- comp[train,]
+testing <- comp[-train,]
+
+mdl_logis <- glm(open~., data = training, family = binomial("logit"))
+summary(mdl_logis)
+
+pred_logis <- predict(mdl_logis, newdata = testing)
+error_rate <- mean((pred_logis>.5 & testing$open == 0) | (pred_logis<.5 & testing$open == 1))
+error_rate
+
+pred_logis <- ifelse(pred_logis>=0.5, 1, 0)
+cm <- confusion_matrix(predictions = factor(pred_logis), targets = factor(testing$open))
+
+
+plot_confusion_matrix(cm$`Confusion Matrix`[[1]],
+                      add_sums = TRUE,
+                      add_col_percentages = FALSE,
+                      add_row_percentages = FALSE,
+                      sums_settings = sum_tile_settings(
+            palette = "Oranges",
+            label = "Total",
+            tc_tile_border_color = "black"
+  ))
+
+rm(comp, eigenvalue, mdl_data.pca, mdl_logis, training, testing, error_rate, pred_logis, train)
+```
+### For All Mice
+```{r}
+plt <- ggplot()
+results <- data.frame(pred = NULL, true = NULL)
+acc <- data.frame(mouse_id = NULL, prop_open = NULL, prop_closed = NULL, larger_class = NULL, accuracy = NULL)
+plt <- NULL
+for (id in unique(bz_all$df)){
+  mdl_data <- bz_all %>% filter(df == id) %>% pivot_wider() %>% select(-c(df,time))
+  #print(nrow(mdl_data))
+  mdl_data.pca <- PCA(mdl_data[,-1], scale.unit = TRUE, ncp=n_pc, graph = FALSE) #set graph=TRUE can see the arrow plot
+  eigenvalue <- get_eigenvalue(mdl_data.pca) #80:95.6%; 60:90%; 40: 80.8%
+  
+  # extract principal components
+  comp <- data.frame(mdl_data.pca$ind$coord)
+  
+  # fit model
+  comp$open <- mdl_data$open
+  
+  set.seed(1)
+  train <- sample(1:nrow(comp), size = round(.8*nrow(comp)), replace = FALSE)
+  training <- comp[train,]
+  testing <- comp[-train,]
+  
+  mdl_logis <- glm(open~., data = training, family = binomial("logit"))
+  
+  summary(mdl_logis)
+  pred_logis <- predict(mdl_logis, newdata = testing)
+  error_rate <- mean((pred_logis>.5 & testing$open == 0) | (pred_logis<.5 & testing$open == 1))
+  #print(error_rate)
+  
+  
+  logisROC <- roc(testing$open, pred_logis)
+  assign(paste0("roc_",id),logisROC) 
+  #---
+  pred_logis <- ifelse(pred_logis>=0.5, 1, 0)
+  
+  results <- rbind(results, data.frame(pred = factor(pred_logis),true = factor(testing$open)))
+  acc <- rbind(acc, data.frame(mouse_id = id, 
+                               prop_open = sum(mdl_data$open)/ nrow(mdl_data),
+                               prop_closed = (nrow(mdl_data)-sum(mdl_data$open))/ nrow(mdl_data),
+                               accuracy = 1-error_rate))
+
+
+}
+
+acc <- acc%>%  rowwise %>%mutate(larger_class =  max(prop_open, prop_closed))
+```
+
+```{r}
+# Across ALL models
+cm <- confusion_matrix(predictions = results$pred, targets = results$true)
+
+plot_confusion_matrix(cm$`Confusion Matrix`[[1]],
+                      add_sums = TRUE,
+                      add_col_percentages = FALSE,
+                      add_row_percentages = FALSE,
+                      sums_settings = sum_tile_settings(
+            palette = "Oranges",
+            label = "Total",
+            tc_tile_border_color = "black"
+  )) + labs(title = "Total for All 11 Mice/Models")
+
+
+ggroc(list("251" = roc_251, "254" = roc_254,
+           "255" = roc_255, "256" = roc_256,
+           "274" = roc_274, "409" = roc_409,
+           "412" = roc_412, "414" = roc_414,
+           "416" = roc_416,
+           "417" = roc_417, "418" = roc_418))
+
+
+ggplot(data = acc,aes(x = mouse_id))+
+  geom_errorbar(aes(ymax = accuracy, ymin = larger_class, x = mouse_id,y = accuracy),width = 0)+
+  geom_point(aes(y = accuracy, color = "Model Accuracy"), size = 3)+
+  geom_point(aes(y = larger_class, color = "Zero Rule Accuracy"), size = 3)+
+  labs(x = "Mouse ID", y = "Accuracy", title = "Accuracy of Test Data for Each Mouse/Model", subtitle= "Where \"Zero Rule\" is always selecting the larger class \nGoal = Model Acc > Zero Rule Acc", color = "Accuracy")
+
+```
+
+
+
+
+# Simple Neural Net
+
+# Recurrent Neural Net
+
+#
