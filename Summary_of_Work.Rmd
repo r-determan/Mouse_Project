@@ -86,6 +86,10 @@ rm(bz_long, f, f_abbr,folders, prefix, sub_f, bb, bz)
 bz_all <- bz_all[-which(bz_all$open==0 & bz_all$closed==0),]
 bz_all <- bz_all %>% select(-closed)
 
+
+all_results <- data.frame(model_name = NULL,
+                          zero_rule_acc = NULL,
+                          model_acc = NULL)
 ```
 
 
@@ -133,7 +137,13 @@ plot_confusion_matrix(cm$`Confusion Matrix`[[1]],
             tc_tile_border_color = "black"
   ))
 
-rm(comp, eigenvalue, mdl_data.pca, mdl_logis, training, testing, error_rate, pred_logis, train)
+zero_rule_acc <- ifelse(sum(testing$open == 0)>sum(testing$open == 1), sum(testing$open == 0)/nrow(testing),  sum(testing$open == 1)/nrow(testing))
+all_results <- rbind(all_results, data.frame(model_name = "Logistic Reg w/ PCA",
+                                             zero_rule_acc = zero_rule_acc,
+                                             model_acc = 1-error_rate))
+
+
+rm(comp, eigenvalue, mdl_data.pca, mdl_logis, training, testing, error_rate, pred_logis, train, zero_rule_acc, cm)
 ```
 
 ### For All Mice
@@ -182,6 +192,8 @@ for (id in unique(bz_all$df)){
 }
 
 acc <- acc%>%  rowwise %>%mutate(larger_class =  max(prop_open, prop_closed))
+
+
 ```
 
 ```{r}
@@ -218,6 +230,7 @@ rm(cm, comp, data_clean, eigenvalue, logisROC, mdl_data, mdl_data.pca, mdl_logis
    roc_251, roc_254, roc_255, roc_256,roc_257, roc_258, roc_274, roc_409, roc_412, roc_414, roc_416, roc_417, roc_418, 
    testing, training, error_rate, id, n_pc, plt, pred_logis, train, acc, bz_all)
 ```
+
 
 
 
@@ -294,7 +307,6 @@ pred <- ifelse(pred>=0.5, 1, 0)
 if(sum(y_test)>0.5*length(y_test)){
   print(paste("Zero Rule Accuracy:", round(sum(y_test)/length(pred),4)))
 } else{ print(paste("Zero Rule Accuracy:", round(sum(y_test==0)/length(pred),4))) }
-
 print(paste("Model Accuracy =", round(sum(pred== y_test)/length(pred),4)))
 
 summary(model)
@@ -304,6 +316,12 @@ plot(history)
 result <- data.frame(true = factor(y_test), pred = factor(pred))
 
 
+zero_rule_acc <- ifelse(sum(y_test == 0)>sum(y_test == 1), sum(y_test== 0)/nrow(y_test),  sum(y_test == 1)/nrow(y_test))
+all_results <- rbind(all_results, data.frame(model_name = "Simple Neural Net",
+                                             zero_rule_acc = zero_rule_acc,
+                                             model_acc = sum(result$true == result$pred)/nrow(result)))
+
+print(paste("Model Accuracy",round(sum(result$true == result$pred)/nrow(result),4)))
 cm <- confusion_matrix(targets =result$true, predictions = result$pred)
 plot_confusion_matrix(cm$`Confusion Matrix`[[1]],
                       add_sums = TRUE,
@@ -314,11 +332,16 @@ plot_confusion_matrix(cm$`Confusion Matrix`[[1]],
             label = "Total",
             tc_tile_border_color = "black"
   )) + labs(title = "Neural Network: Mouse 409")
+
+rm(result, zero_rule_acc, cm, model, pred, train, test, history, X_test, X_train, y_test,y_train, istrain)
+
 ```
 
 # Recurrent Neural Network
 
 ## Incorrect Version w/ randomly selected train/test
+**At first, we incorrectly split the training and testing set randomly. The below shows the** ***incorrect*** **model. Interestingly, this incorrectly prepared model performs better than the RNN that is correctly setup in the next section **
+
 ```{r}
 n_neurons <- 25
 n_lags <- 5
@@ -393,6 +416,8 @@ if(sum(result$true==1)>0.5*nrow(result)){
 
 print(paste("Model Accuracy",round(sum(result$true == result$pred)/nrow(result),4)))
 
+
+
 cm <- confusion_matrix(targets =result$true, predictions = result$pred)
 plot_confusion_matrix(cm$`Confusion Matrix`[[1]],
                       add_sums = TRUE,
@@ -404,9 +429,20 @@ plot_confusion_matrix(cm$`Confusion Matrix`[[1]],
             tc_tile_border_color = "black"
   )) + labs(title = "Incorrect RNN: Mouse 409")
 
+
+zero_rule_acc <- ifelse(sum(result$true == 0)>sum(result$true == 1), 
+                        sum(result$true == 0)/nrow(result),  
+                        sum(result$true == 1)/nrow(result))
+all_results <- rbind(all_results, data.frame(model_name = "Incorrect RNN",
+                                             zero_rule_acc = zero_rule_acc,
+                                             model_acc = sum(result$true == result$pred)/nrow(result)))
+
+rm(arframe, xdata, epochs, istrain, model, n, n_lags, n_neurons, xrnn, y_true, ydata, zero_rule_acc, lagm, cm, history, result, kpred)
+nrow(result$true)
 ```
 
-### Correct RNN: Mouse 409
+## Correct RNN: Mouse 409
+### 25 neurons
 
 ```{r}
 n_neurons <- 25
@@ -498,11 +534,23 @@ plot_confusion_matrix(cm$`Confusion Matrix`[[1]],
             tc_tile_border_color = "black"
   )) + labs(title = "Correct RNN: Mouse 409")
 
+
+zero_rule_acc <- ifelse(sum(result$true == 0)>sum(result$true == 1), 
+                        sum(result$true == 0)/nrow(result),  
+                        sum(result$true == 1)/nrow(result))
+all_results <- rbind(all_results, data.frame(model_name = "Correct RNN w/ 25 neurons",
+                                             zero_rule_acc = zero_rule_acc,
+                                             model_acc = sum(result$true == result$pred)/nrow(result)))
+
+rm(arframe, xdata, epochs, istrain, model, n, n_lags, n_neurons, xrnn, y_true, ydata, zero_rule_acc, lagm, cm, history, result, kpred)
+
 ```
 
-### Correct RNN w/ all neurons mouse 409
-```{r}
 
+
+
+### All neurons
+```{r}
 n_neurons <- ncol(data_clean)-1
 n_lags <- 5
 epochs <- 50
@@ -570,8 +618,6 @@ plot(history)
 
 result <- data.frame(true = y_true, pred = kpred)
 
-
-
 if(sum(result$true==1)>0.5*nrow(result)){ #if there are more 1s than 0s
   print(paste("Zero Rule Accuracy:", 
               round(sum(result$true==1)/nrow(result),4)))
@@ -592,5 +638,24 @@ plot_confusion_matrix(cm$`Confusion Matrix`[[1]],
             tc_tile_border_color = "black"
   )) + labs(title = "Correct RNN: Mouse 409")
 
+
+zero_rule_acc <- ifelse(sum(result$true == 0)>sum(result$true == 1), 
+                        sum(result$true == 0)/nrow(result),  
+                        sum(result$true == 1)/nrow(result))
+all_results <- rbind(all_results, data.frame(model_name = "Correct RNN w/ all neurons",
+                                             zero_rule_acc = zero_rule_acc,
+                                             model_acc = sum(result$true == result$pred)/nrow(result)))
+
+rm(arframe, xdata, epochs, istrain, model, n, n_lags, n_neurons, xrnn, y_true, ydata, zero_rule_acc, lagm, cm, history, result, kpred)
 ```
 
+
+# Summary
+```{r}
+all_results %>% knitr::kable()
+```
+
+
+
+
+# Bidirectional LSTM 
