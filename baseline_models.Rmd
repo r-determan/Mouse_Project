@@ -56,8 +56,8 @@ means[which.max(means$mean),]
 
 ## Logistic Model Combined With PCA (components = 40)
 ```{r}
-mdl_data.pca <- PCA(mdl_data[,-1], scale.unit = TRUE, ncp=40, graph = FALSE) #set graph=TRUE can see the arrow plot
-eigenvalue <- get_eigenvalue(mdl_data.pca) #80:95.6%; 60:90%; 40: 80.8%
+mdl_data.pca <- PCA(mdl_data[,-1], scale.unit = TRUE, ncp=25, graph = FALSE) #set graph=TRUE can see the arrow plot
+eigenvalue <- get_eigenvalue(mdl_data.pca) #80:95.6%; 60:90%; 40: 80.8%; 25:70%
 
 # extract principal components
 comp <- data.frame(mdl_data.pca$ind$coord)
