@@ -1,0 +1,654 @@
+---
+title: "Summary_of_Work"
+output:
+  html_document: default
+  pdf_document: default
+date: '2022-05-02'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE)
+pacman::p_load(R.matlab, dplyr,tidyr, caret, factoextra, FactoMineR, pROC,stringr,cvms, keras,kerasR)
+
+```
+
+
+# Data Pre-processing
+```{r}
+# Import mouse 409 data
+bb <- readMat("Data/Zero_Maze/608034_409/Day_1/Trial_001_0/binned_behavior.mat")
+bb <- data.frame(t(bb$binned.behavior))
+names(bb) <- c("open", "closed")
+bz <- readMat("Data/Zero_Maze/608034_409/Day_1/Trial_001_0/binned_zscore.mat")
+bz <- data.frame(bz$binned.zscore)
+
+#combine zscore and behavior
+data <- data.frame(cbind(bb, bz))
+data$time <- seq(1:nrow(data))
+  
+#remove rows where no location is coded
+data_clean <- data[-which(data$open==0 & data$closed==0),]
+
+#select only "open" column as indicator
+mdl_data <- data_clean %>% select(-closed)
+
+#remove extra variables
+rm(bb, bz, data)
+```
+
+```{r}
+# Import all mice data into one data frame
+# read in our data
+prefix <- "Data/Zero_Maze/"
+folders <- list.files(prefix)
+
+bz_all <- NULL
+for (f in folders){
+ #abbreviation for file name
+ f_abbr <- str_sub(f, -3, -1)
+ #subfolder
+ sub_f <- list.files(paste0(prefix, f, "/Day_1/Trial_001_0"))
+ 
+ # # MAKE EACH MOUSE IN ITS OWN VARIABLE
+ # #binned behavior
+ # assign(paste0("bb_",f_abbr), 
+ #         readMat(paste0(prefix, f, "/Day_1/Trial_001_0/binned_behavior.mat")))
+ # 
+ # #z score
+ # assign(paste0("bz_",f_abbr), 
+ #         readMat(paste0(prefix, f, "/Day_1/Trial_001_0/binned_zscore.mat")))
+  
+ 
+ # ADD ALL MICE TO SAME VARIABLE
+ #import data
+  bb <- readMat(paste0(prefix, f, "/Day_1/Trial_001_0/binned_behavior.mat"))
+  bz <- readMat(paste0(prefix, f, "/Day_1/Trial_001_0/binned_zscore.mat"))
+ 
+ #extract dataframes from list
+  bb <- t(bb$binned.behavior)
+  bz <- data.frame(bz$binned.zscore)
+ 
+ #add behavior to zscore dataframe
+  bz$open <- bb[,2]
+  bz$closed <- bb[,1]
+ #add row number as time proxy
+  bz$time <- seq(1:nrow(bz))
+
+  #pivot long and add all data to a single dataframe
+  bz_long <- bz %>% pivot_longer(cols = -c(open, closed, time)) %>% mutate(df = f_abbr)
+  bz_all <- rbind(bz_all, bz_long)
+}
+
+#remove extra variables
+rm(bz_long, f, f_abbr,folders, prefix, sub_f, bb, bz)
+
+#select rows were location is coded and select only open column
+bz_all <- bz_all[-which(bz_all$open==0 & bz_all$closed==0),]
+bz_all <- bz_all %>% select(-closed)
+
+
+all_results <- data.frame(model_name = NULL,
+                          zero_rule_acc = NULL,
+                          model_acc = NULL)
+```
+
+
+
+
+
+# Functions
+```{r}
+plot_cm <- function(result, title = ""){
+  cm <- confusion_matrix(targets =result$true, predictions = result$pred)
+  plot_confusion_matrix(cm$`Confusion Matrix`[[1]],
+                        add_sums = TRUE,
+                        add_col_percentages = FALSE,
+                        add_row_percentages = FALSE,
+                        sums_settings = sum_tile_settings(
+              palette = "Oranges",
+              label = "Total",
+              tc_tile_border_color = "black"
+    )) + labs(title = title)
+}
+
+accuracy_table <- function(result,title = "",  all_results){
+  zero_rule_acc <- ifelse(sum(result$true == 0)>sum(result$true == 1), 
+                        sum(result$true == 0)/nrow(result),  
+                        sum(result$true == 1)/nrow(result))
+  all_results <- rbind(all_results, data.frame(model_name = title,
+                                             zero_rule_acc = zero_rule_acc,
+                                             model_acc = sum(result$true == result$pred)/nrow(result)))
+  return(all_results)
+}
+
+
+n_lags <- 5
+data_prep_lag <- function(data_clean, n_neurons, random_split = 0){
+  #n_neurons <- ncol(data_clean)-1
+  n_lags <- 5
+  
+  #data_mat <- data.matrix(data_clean %>% select(-closed))
+  xdata <- data.matrix(data_clean %>% select(-c(open)) %>% select(seq(1,n_neurons)))
+  ydata <- data.matrix(data_clean %>% select(open))
+  #create lag function
+  lagm <- function (x, k = 1) {
+    n <- nrow (x)
+    pad <- matrix (NA , k, ncol (x))
+    rbind (pad , x[1:(n - k), ])
+   }
+  #make lags
+  arframe <- data.frame ( open = ydata ,
+  L1 = lagm ( xdata , 1) , L2 = lagm ( xdata , 2),
+  L3 = lagm ( xdata , 3) , L4 = lagm ( xdata , 4) ,
+  L5 = lagm ( xdata , 5)
+  )
+  if (random_split == 0){
+  #separate train and test
+  istrain <- rep(TRUE, round(nrow(arframe)*0.7/3))
+  istrain <- c(istrain, rep(FALSE,nrow(arframe)/3-round(nrow(arframe)*0.7/3)))
+  istrain <- c(istrain, istrain,istrain, FALSE)}
+  else{
+    istrain <- sample(c(TRUE,FALSE),size = nrow(arframe), prob = c(0.7,0.3), replace = TRUE)
+  }
+  
+  #remove na rows due to lags
+  arframe <- arframe [ -(1:n_lags) , ]
+  istrain <- istrain [ -(1:n_lags) ]
+  ydata <- ydata[-(1:n_lags)]
+  n <- nrow ( arframe )
+  #select only neuron data, including lags -- exclude "open"
+  xrnn <- data.matrix ( arframe [ , -1])
+  
+  #dim(xrnn)
+  xrnn <- array ( xrnn , c (n , n_neurons , n_lags) )  #format to n rows; number of neurons columns; number of lags layers
+  #dim(xrnn)
+  
+  xrnn <- xrnn [ , , n_lags:1] #reorder columns 
+  #aperm = Transpose an array by permuting its dimensions and optionally resizing it.
+  #he final step rearranges the coordinates of the array (like a partial transpose) into the format that the RNN module in keras expects
+  xrnn <- aperm ( xrnn , c (1 , 3 , 2) )
+  #dim ( xrnn )
+  
+  out <- list(xrnn, arframe, istrain)
+}
+
+```
+
+
+# Baseline Model: Logistic Regression 
+
+## Logistic Regression with PCA
+
+### For Mouse 409
+```{r}
+n_pc <- 10
+mdl_data.pca <- PCA(mdl_data[,-1], scale.unit = TRUE, ncp=n_pc, graph = TRUE) #set graph=TRUE can see the arrow plot
+eigenvalue <- get_eigenvalue(mdl_data.pca) #80:95.6%; 60:90%; 40: 80.8%
+
+
+# extract principal components
+comp <- data.frame(mdl_data.pca$ind$coord)
+
+# fit model
+comp$open <- mdl_data$open
+set.seed(1)
+train <- sample(1:nrow(comp), size = round(.8*nrow(comp)), replace = FALSE)
+training <- comp[train,]
+testing <- comp[-train,]
+
+mdl_logis <- glm(open~., data = training, family = binomial("logit"))
+summary(mdl_logis)
+
+pred_logis <- predict(mdl_logis, newdata = testing)
+error_rate <- mean((pred_logis>.5 & testing$open == 0) | (pred_logis<.5 & testing$open == 1))
+error_rate
+
+pred_logis <- ifelse(pred_logis>=0.5, 1, 0)
+
+plot_cm(result = data.frame(true = factor(testing$open), pred = factor(pred_logis)), title = "Logistic Reg w/ PCA")
+all_results <- accuracy_table(data.frame(true = factor(testing$open),
+                                         pred = factor(pred_logis)),
+                              title = "Logistic Reg w/ PCA", 
+                              all_results = all_results)
+
+rm(comp, eigenvalue, mdl_data.pca, mdl_logis, training, testing, error_rate, pred_logis, train, zero_rule_acc, cm)
+```
+
+### For All Mice
+```{r}
+plt <- ggplot()
+results <- data.frame(pred = NULL, true = NULL)
+acc <- data.frame(mouse_id = NULL, prop_open = NULL, prop_closed = NULL, larger_class = NULL, accuracy = NULL)
+plt <- NULL
+for (id in unique(bz_all$df)){
+  mdl_data <- bz_all %>% filter(df == id) %>% pivot_wider() %>% select(-c(df,time))
+  #print(nrow(mdl_data))
+  mdl_data.pca <- PCA(mdl_data[,-1], scale.unit = TRUE, ncp=n_pc, graph = FALSE) #set graph=TRUE can see the arrow plot
+  eigenvalue <- get_eigenvalue(mdl_data.pca) #80:95.6%; 60:90%; 40: 80.8%
+  
+  # extract principal components
+  comp <- data.frame(mdl_data.pca$ind$coord)
+  
+  # fit model
+  comp$open <- mdl_data$open
+  
+  set.seed(1)
+  train <- sample(1:nrow(comp), size = round(.8*nrow(comp)), replace = FALSE)
+  training <- comp[train,]
+  testing <- comp[-train,]
+  
+  mdl_logis <- glm(open~., data = training, family = binomial("logit"))
+  
+  summary(mdl_logis)
+  pred_logis <- predict(mdl_logis, newdata = testing)
+  error_rate <- mean((pred_logis>.5 & testing$open == 0) | (pred_logis<.5 & testing$open == 1))
+  #print(error_rate)
+  
+  
+  logisROC <- roc(testing$open, pred_logis)
+  assign(paste0("roc_",id),logisROC) 
+  #---
+  pred_logis <- ifelse(pred_logis>=0.5, 1, 0)
+  
+  results <- rbind(results, data.frame(pred = factor(pred_logis),true = factor(testing$open)))
+  acc <- rbind(acc, data.frame(mouse_id = id, 
+                               prop_open = sum(mdl_data$open)/ nrow(mdl_data),
+                               prop_closed = (nrow(mdl_data)-sum(mdl_data$open))/ nrow(mdl_data),
+                               accuracy = 1-error_rate))
+
+
+}
+
+acc <- acc%>%  rowwise %>%mutate(larger_class =  max(prop_open, prop_closed))
+
+
+```
+
+```{r}
+# Across ALL models
+cm <- confusion_matrix(predictions = results$pred, targets = results$true)
+
+plot_confusion_matrix(cm$`Confusion Matrix`[[1]],
+                      add_sums = TRUE,
+                      add_col_percentages = FALSE,
+                      add_row_percentages = FALSE,
+                      sums_settings = sum_tile_settings(
+            palette = "Oranges",
+            label = "Total",
+            tc_tile_border_color = "black"
+  )) + labs(title = "Total for All 11 Mice/Models")
+
+
+ggroc(list("251" = roc_251, "254" = roc_254,
+           "255" = roc_255, "256" = roc_256,
+           "274" = roc_274, "409" = roc_409,
+           "412" = roc_412, "414" = roc_414,
+           "416" = roc_416,
+           "417" = roc_417, "418" = roc_418))
+
+
+ggplot(data = acc,aes(x = mouse_id))+
+  geom_errorbar(aes(ymax = accuracy, ymin = larger_class, x = mouse_id,y = accuracy),width = 0)+
+  geom_point(aes(y = accuracy, color = "Model Accuracy"), size = 3)+
+  geom_point(aes(y = larger_class, color = "Zero Rule Accuracy"), size = 3)+
+  labs(x = "Mouse ID", y = "Accuracy", title = "Accuracy of Test Data for Each Mouse/Model", subtitle= "Where \"Zero Rule\" is always selecting the larger class \nGoal = Model Acc > Zero Rule Acc", color = "Accuracy")
+
+
+rm(cm, comp, data_clean, eigenvalue, logisROC, mdl_data, mdl_data.pca, mdl_logis, results,
+   roc_251, roc_254, roc_255, roc_256,roc_257, roc_258, roc_274, roc_409, roc_412, roc_414, roc_416, roc_417, roc_418, 
+   testing, training, error_rate, id, n_pc, plt, pred_logis, train, acc, bz_all)
+```
+
+
+
+
+
+
+
+# Simple Neural Net
+**Areas still to improve:** The simple neural network does not take into account the time series element of the data. It predicts the current location based on the current state of the neurons. 
+
+```{r}
+# Import mouse 409 data
+bb <- readMat("Data/Zero_Maze/608034_409/Day_1/Trial_001_0/binned_behavior.mat")
+bb <- data.frame(t(bb$binned.behavior))
+names(bb) <- c("open", "closed")
+
+bz <- readMat("Data/Zero_Maze/608034_409/Day_1/Trial_001_0/binned_zscore.mat")
+bz <- data.frame(bz$binned.zscore)
+
+data <- data.frame(cbind(bb, bz))
+data$time <- seq(1:nrow(data))
+
+data_clean <- data[-which(data$open==0 & data$closed==0),]
+
+rm(bb, bz, data)
+```
+
+```{r}
+istrain <- sample(c(TRUE, FALSE), size = nrow(data_clean), replace = TRUE, prob = c(0.7, 0.3))
+
+data_clean <- data_clean %>% mutate(open = as.numeric(open)) %>% select(-c(closed, time))
+
+
+train <- data_clean[istrain,]
+X_train <- train %>% select(-c(open))
+X_train <- as.matrix(X_train)
+
+y_train <- train %>% select(open)
+y_train <- as.matrix(y_train)
+
+test <-  data_clean[!istrain,]
+X_test <- test %>% select(-c(open))
+X_test <- as.matrix(X_test)
+y_test <- test %>% select(open)
+y_test <- as.matrix(y_test)
+```
+
+```{r}
+model <- keras_model_sequential() 
+
+# Add layers to the model
+model %>% 
+    layer_dense(units = 100, activation = 'relu', input_shape = c(ncol(X_train))) %>% 
+    layer_dense(units = 50, activation = 'relu') %>% 
+    layer_dense(units = 1, activation = 'sigmoid')
+
+
+history <- model %>% 
+  compile(
+   loss = "binary_crossentropy",
+   optimizer = optimizer_rmsprop(),
+   metrics = c("accuracy"),
+)%>% 
+  fit(X_train, y_train,
+              epochs = 25, 
+              batch_size = 50,
+              validation_split = 0.3, verbose = 0)
+
+
+pred <- model %>% predict(X_test)
+pred <- ifelse(pred>=0.5, 1, 0)
+#plot_model(model )
+
+
+summary(model)
+
+plot(history)
+
+result <- data.frame(true = factor(y_test), pred = factor(pred))
+
+plot_cm(result = result, title = "Neural Net")
+all_results <- accuracy_table(result,
+                              title = "Neural Net", 
+                              all_results = all_results)
+
+rm(result, zero_rule_acc, cm, model, pred, train, test, history, X_test, X_train, y_test,y_train, istrain)
+
+```
+
+# Recurrent Neural Network
+
+## Incorrect Version w/ randomly selected train/test
+**At first, we incorrectly split the training and testing set randomly. The below shows the** ***incorrect*** **model. Interestingly, this incorrectly prepared model performs better than the RNN that is correctly setup in the next section **
+
+```{r}
+n_neurons <- 25
+epochs <- 50
+out <- data_prep_lag(data_clean ,n_neurons , random_split = 1)
+xrnn <- out[[1]]
+arframe <-  out[[2]]
+istrain <- out[[3]]
+ydata <- arframe$open
+
+model <- keras_model_sequential () %>%
+  layer_simple_rnn ( units = 100 , 
+                     input_shape = list (n_lags , n_neurons) ,
+                     activation = "relu") %>%
+  layer_dense ( units = 50, activation = "relu") %>% 
+  layer_dense ( units = 1, activation = "sigmoid")
+model %>% compile ( optimizer = optimizer_rmsprop() ,
+                    loss = "binary_crossentropy",
+                    metrics = c("accuracy") )
+history <- model %>% 
+  fit(xrnn[ istrain , , ] , arframe[ istrain , "open" ] ,
+       batch_size = 50 , epochs = epochs ,
+       validation_data = list ( xrnn [! istrain , , ] , arframe [! istrain , "open" ]), 
+      verbose = 0
+)
+kpred <- predict ( model , xrnn [! istrain , , ])
+y_true <- factor(matrix(ydata[!istrain]))
+kpred <- factor(round(kpred,0))
+
+summary(model)
+
+plot(history)
+
+result <- data.frame(true =y_true, pred = kpred)
+
+plot_cm(result = result, title = "Incorrect RNN")
+all_results <- accuracy_table(result,
+                              title = "Incorrect RNN", 
+                              all_results = all_results)
+
+rm(arframe, xdata, epochs, istrain, model, n, n_neurons, xrnn, y_true, ydata, zero_rule_acc, lagm, cm, history, result, kpred)
+```
+
+## Correct RNN: Mouse 409
+### 25 neurons
+
+```{r}
+n_neurons <- 25
+n_lags <- 5
+epochs <- 50
+out <- data_prep_lag(data_clean ,n_neurons )
+xrnn <- out[[1]]
+arframe <-  out[[2]]
+istrain <- out[[3]]
+ydata <- arframe$open
+
+
+model <- keras_model_sequential () %>%
+  layer_simple_rnn ( units = 100 , 
+                     input_shape = list (n_lags , n_neurons) ,
+                     activation = "relu") %>%
+  layer_dense ( units = 50, activation = "relu") %>% 
+  layer_dense ( units = 1, activation = "sigmoid")
+model %>% compile ( optimizer = optimizer_rmsprop() ,
+                    loss = "binary_crossentropy",
+                    metrics = c("accuracy") )
+history <- model %>% 
+  fit(xrnn[ istrain , , ] , arframe[ istrain , "open" ] ,
+       batch_size = 50 , epochs = epochs ,
+       validation_data = list ( xrnn [! istrain , , ] , arframe [! istrain , "open" ]), 
+      verbose = 0
+)
+kpred <- predict ( model , xrnn [! istrain , , ])
+y_true <- factor(matrix(ydata[!istrain]))
+kpred <- factor(round(kpred,0))
+
+summary(model)
+
+plot(history)
+
+result <- data.frame(true = y_true, pred = kpred)
+plot_cm(result = result, title = "Correct RNN")
+all_results <- accuracy_table(result,
+                              title = "Correct RNN", 
+                              all_results = all_results)
+
+rm(arframe, xdata, epochs, istrain, model, n, n_lags, n_neurons, xrnn, y_true, ydata, zero_rule_acc, lagm, cm, history, result, kpred)
+
+```
+
+
+
+
+### All neurons
+```{r}
+epochs <- 50
+n_neurons <- ncol(data_clean)-1 
+out <- data_prep_lag(data_clean ,n_neurons )
+xrnn <- out[[1]]
+arframe <-  out[[2]]
+n_lags <- 5
+istrain <- out[[3]]
+ydata <- arframe$open
+
+
+model <- keras_model_sequential () %>%
+  layer_simple_rnn ( units = 100 , 
+                     input_shape = list (n_lags , n_neurons) ,
+                     activation = "relu") %>%
+  layer_dense ( units = 50, activation = "relu") %>% 
+  layer_dense ( units = 1, activation = "sigmoid")
+model %>% compile ( optimizer = optimizer_rmsprop() ,
+                    loss = "binary_crossentropy",
+                    metrics = c("accuracy") )
+history <- model %>% 
+  fit(xrnn[ istrain , , ] , arframe[ istrain , "open" ] ,
+       batch_size = 50 , epochs = epochs ,
+       validation_data = list ( xrnn [! istrain , , ] , arframe [! istrain , "open" ]), 
+      verbose = 0
+)
+kpred <- predict ( model , xrnn [! istrain , , ])
+y_true <- factor(matrix(ydata[!istrain]))
+kpred <- factor(round(kpred,0))
+
+summary(model)
+
+plot(history)
+
+result <- data.frame(true = y_true, pred = kpred)
+
+
+plot_cm(result = result, title = "Correct RNN w/ all neurons")
+all_results <- accuracy_table(result,
+                              title = "Correct RNN w/ all neurons", 
+                              all_results = all_results)
+
+rm(arframe, xdata, epochs, istrain, model, n, n_lags, n_neurons, xrnn, y_true, ydata, zero_rule_acc, lagm, cm, history, result, kpred)
+```
+
+
+
+
+# LSTM
+
+The model seems to learn very quickly and then fails to improve... "A new random input sequence will be generated each epoch for the network to be fit on. This ensures that the model does not memorize a single sequence and instead can generalize a solution to solve all possible random input sequences for this problem."
+
+```{r}
+epochs <- 50
+n_neurons <- 25
+n_lags <- 5
+out <- data_prep_lag(data_clean ,n_neurons )
+xrnn <- out[[1]]
+arframe <-  out[[2]]
+istrain <- out[[3]]
+ydata <- arframe$open
+```
+
+```{r}
+model <- keras_model_sequential () %>%
+  layer_lstm(n_lags*2, input_shape = list(n_lags , n_neurons), return_sequences = TRUE) %>% 
+  time_distributed(layer_dense ( units = 1, activation = "sigmoid"))
+model %>% compile ( optimizer = optimizer_rmsprop() ,
+                    loss = "binary_crossentropy",
+                    metrics = c("accuracy") )
+history <- model %>% 
+  fit(xrnn[ istrain , , ] , arframe[ istrain , "open" ] ,
+       batch_size = 50 , epochs = epochs ,
+       validation_data = list ( xrnn [! istrain , , ] , arframe [! istrain , "open" ]), 
+      verbose = 0
+)
+kpred <- predict ( model , xrnn [! istrain , , ])
+y_true <- factor(matrix(ydata[!istrain]))
+kpred <- factor(round(kpred,0))
+
+summary(model)
+
+plot(history)
+
+result <- data.frame(true = y_true, pred = kpred)
+
+if(sum(result$true==1)>0.5*nrow(result)){ #if there are more 1s than 0s
+  print(paste("Zero Rule Accuracy:", 
+              round(sum(result$true==1)/nrow(result),4)))
+} else{ print(paste("Zero Rule Accuracy:",
+                    round(sum(result$true==0)/nrow(result),4))) }
+
+result$true <- factor(result$true, levels = c(0,1))
+result$pred <- factor(result$pred, levels = c(0,1))
+
+plot_cm(result = result, title = "LSTM")
+all_results <- accuracy_table(result,
+                              title = "LSTM", 
+                              all_results = all_results)
+
+rm(arframe, xdata, epochs, istrain, model, n, n_lags, n_neurons, xrnn, y_true, ydata, zero_rule_acc, lagm, cm, history, result, kpred)
+```
+
+
+```{r}
+epochs <- 50
+n_neurons <- ncol(data_clean)-1 
+n_lags <- 5
+out <- data_prep_lag(data_clean ,n_neurons )
+xrnn <- out[[1]]
+arframe <-  out[[2]]
+istrain <- out[[3]]
+ydata <- arframe$open
+
+
+model <- keras_model_sequential () %>%
+  layer_lstm(n_lags*2, input_shape = list(n_lags , n_neurons), return_sequences = TRUE) %>% 
+  time_distributed(layer_dense ( units = 1, activation = "sigmoid"))
+model %>% compile ( optimizer = optimizer_rmsprop() ,
+                    loss = "binary_crossentropy",
+                    metrics = c("accuracy") )
+history <- model %>% 
+  fit(xrnn[ istrain , , ] , arframe[ istrain , "open" ] ,
+       batch_size = 50 , epochs = epochs ,
+       validation_data = list ( xrnn [! istrain , , ] , arframe [! istrain , "open" ]), 
+      verbose = 0
+)
+kpred <- predict ( model , xrnn [! istrain , , ])
+y_true <- factor(matrix(ydata[!istrain]))
+kpred <- factor(round(kpred,0))
+
+summary(model)
+
+plot(history)
+
+result <- data.frame(true = y_true, pred = kpred)
+result$true <- factor(result$true, levels = c(0,1))
+result$pred <- factor(result$pred, levels = c(0,1))
+
+
+
+plot_cm(result, "LSTM All Neurons")
+accuracy_table(result, "LSTM All Neurons", all_results)
+
+#rm(arframe, xdata, epochs, istrain, model, n, n_lags, n_neurons, xrnn, y_true, ydata, zero_rule_acc, lagm, cm, history, result, kpred)
+```
+
+
+# Summary
+```{r}
+ggplot(data = all_results,aes(x = model_name))+
+  geom_errorbar(aes(ymax = model_acc, ymin = zero_rule_acc, x = model_name,y = model_acc),width = 0)+
+  geom_point(aes(y = model_acc, color = "Model Accuracy"), size = 3)+
+  geom_point(aes(y = zero_rule_acc, color = "Zero Rule Accuracy"), size = 3)+
+  labs(x = "Model", y = "Accuracy", title = "Accuracy of Test Data for Each Type of Model: Mouse 409", subtitle= "Where \"Zero Rule\" is always selecting the larger class \nGoal = Model Acc > Zero Rule Acc", color = "Accuracy")+
+  coord_flip()
+
+
+
+all_results %>%mutate(across(where(is.numeric), round, digits = 4),
+                      model_better = model_acc> zero_rule_acc) %>%  knitr::kable()
+```
+
+
+
+
+# Bidirectional LSTM 
