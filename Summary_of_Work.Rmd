@@ -182,7 +182,7 @@ data_prep_lag <- function(data_clean, n_neurons, random_split = 0){
 
 ```{r}
 n_pc <- 10
-mdl_data.pca <- PCA(mdl_data[,-1], scale.unit = TRUE, ncp=n_pc, graph = TRUE) #set graph=TRUE can see the arrow plot
+mdl_data.pca <- PCA(mdl_data[,-1], scale.unit = TRUE, ncp=n_pc, graph = FALSE) #set graph=TRUE can see the arrow plot
 eigenvalue <- get_eigenvalue(mdl_data.pca) #80:95.6%; 60:90%; 40: 80.8%
 
 
@@ -192,14 +192,14 @@ comp <- data.frame(mdl_data.pca$ind$coord)
 # fit model
 comp$open <- mdl_data$open
 set.seed(1)
-train <- seq(1, round(.8*nrow(comp)))
+train <- seq(1, round(.7*nrow(comp)))
 training <- comp[train,]
 testing <- comp[-train,]
 
 mdl_logis <- glm(open~., data = training, family = binomial("logit"))
 summary(mdl_logis)
 
-pred_logis <- predict(mdl_logis, newdata = testing)
+pred_logis <- predict(mdl_logis, newdata = testing, type = "response")
 error_rate <- mean((pred_logis>.5 & testing$open == 0) | (pred_logis<.5 & testing$open == 1))
 error_rate
 
@@ -217,16 +217,15 @@ rm(comp, eigenvalue, mdl_data.pca, mdl_logis, training, testing, error_rate, pre
 ```
 
 ### For All Mice
-```{r}
-plt <- ggplot()
-results <- data.frame(pred = NULL, true = NULL)
+```{r, message=FALSE}
+results <- data.frame(pred = NULL, true = NULL, mouse_id = NULL)
 acc <- data.frame(mouse_id = NULL, prop_open = NULL, prop_closed = NULL, larger_class = NULL, accuracy = NULL)
 plt <- NULL
 for (id in unique(bz_all$df)){
   mdl_data <- bz_all %>% filter(df == id) %>% pivot_wider() %>% select(-c(df,time))
   #print(nrow(mdl_data))
-  mdl_data.pca <- PCA(mdl_data[,-1], scale.unit = TRUE, ncp=n_pc, graph = FALSE) #set graph=TRUE can see the arrow plot
-  eigenvalue <- get_eigenvalue(mdl_data.pca) #80:95.6%; 60:90%; 40: 80.8%
+  mdl_data.pca <- PCA(mdl_data[,-1], scale.unit = TRUE, ncp=n_pc, graph = FALSE) 
+  eigenvalue <- get_eigenvalue(mdl_data.pca)
   
   # extract principal components
   comp <- data.frame(mdl_data.pca$ind$coord)
@@ -235,24 +234,21 @@ for (id in unique(bz_all$df)){
   comp$open <- mdl_data$open
   
   set.seed(1)
-  train <- sample(1:nrow(comp), size = round(.8*nrow(comp)), replace = FALSE)
+  train <- seq(1, round(.6*nrow(comp)))
   training <- comp[train,]
   testing <- comp[-train,]
   
   mdl_logis <- glm(open~., data = training, family = binomial("logit"))
-  
-  summary(mdl_logis)
-  pred_logis <- predict(mdl_logis, newdata = testing)
+  pred_logis <- predict(mdl_logis, newdata = testing, type = "response")
   error_rate <- mean((pred_logis>.5 & testing$open == 0) | (pred_logis<.5 & testing$open == 1))
   #print(error_rate)
-  
-  
+
   logisROC <- roc(testing$open, pred_logis)
   assign(paste0("roc_",id),logisROC) 
   #---
   pred_logis <- ifelse(pred_logis>=0.5, 1, 0)
   
-  results <- rbind(results, data.frame(pred = factor(pred_logis),true = factor(testing$open)))
+  results <- rbind(results, data.frame(pred = factor(pred_logis),true = factor(testing$open), mouse_id = id))
   acc <- rbind(acc, data.frame(mouse_id = id, 
                                prop_open = sum(mdl_data$open)/ nrow(mdl_data),
                                prop_closed = (nrow(mdl_data)-sum(mdl_data$open))/ nrow(mdl_data),
