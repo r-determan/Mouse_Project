@@ -174,6 +174,98 @@ data_prep_lag <- function(data_clean, n_neurons, random_split = 0){
 ```
 
 
+# Final Model 
+## Bidirectional LSTM All Neurons
+```{r}
+epochs <- 50
+n_neurons <- ncol(data_clean)-1
+n_lags <- 5
+
+out <- data_prep_lag(data_clean ,n_neurons )
+xrnn <- out[[1]]
+arframe <-  out[[2]]
+istrain <- out[[3]]
+ydata <- arframe$open
+
+
+model <- keras_model_sequential () %>%
+  bidirectional(layer_lstm(units = 50, input_shape = list(n_lags , n_neurons))) %>%
+  layer_dense ( units = 1, activation = "sigmoid")
+model %>% compile ( optimizer = optimizer_rmsprop() ,
+                    loss = "binary_crossentropy",
+                    metrics = c("accuracy") )
+history <- model %>% 
+  fit(xrnn[ istrain , , ] , arframe[ istrain , "open" ] ,
+      batch_size = 50 , epochs = epochs ,
+      validation_data = list ( xrnn [! istrain , , ] , arframe [! istrain , "open" ]), 
+      verbose = 0
+  )
+kpred <- predict ( model , xrnn [! istrain , , ])
+y_true <- factor(matrix(ydata[!istrain]))
+kpred <- factor(round(kpred,0))
+
+summary(model)
+
+plot(history)
+
+result <- data.frame(true = y_true, pred = kpred)
+result$true <- factor(result$true, levels = c(0,1))
+result$pred <- factor(result$pred, levels = c(0,1))
+
+
+
+plot_cm(result, "Bidir LSTM All Neurons")
+all_results <- accuracy_table(result, train_y = ydata[istrain],"Bidir LSTM All Neurons", all_results)
+```
+
+
+
+
+```{r}
+# COMPUTE BASELINE (NO SHUFFLE)
+oof_preds <- as.numeric(kpred)-1
+y_valid <- as.numeric(y_true)-1
+
+baseline_mae <-  mean(abs(oof_preds-y_valid ))
+
+results <- NULL
+results <- c(results, c("feature" = "Baseline", "mae" = baseline_mae))
+
+X_valid <- xrnn[istrain,,]
+dim(xrnn)
+
+
+for (k in 1:dim(xrnn)[3]){
+  #for(k in c(1,2)) {
+  x <- 1
+  if(k%%10 == 0){print(k)}
+  # SHUFFLE FEATURE K
+  save_col <-  X_valid[,,k]
+  dim(X_valid[,,k])
+  X_valid[,,k] <- array(runif(k*n_lags, min = min(save_col), max = max(save_col)), dim =  dim(X_valid[,,k]) )
+  #sample(X_valid[,,k])
+  
+  # COMPUTE OOF MAE WITH FEATURE K SHUFFLED
+  oof_preds <- round(predict ( model , X_valid),0)
+  mae <- mean(abs(oof_preds-y_valid ))
+  results <- rbind(results, c("feature" = k, "mae" = mae))
+  X_valid[,,k] <-  save_col
+}
+
+# DISPLAY LSTM FEATURE IMPORTANCE
+df <-  data.frame(results) %>% mutate(mae = as.numeric(mae))%>% arrange(-mae)
+ggplot(data = df[c(1:25, nrow(df)),])+
+  geom_col(mapping = aes(x = mae, y= reorder(feature, mae)))+
+  geom_vline(aes(xintercept =df[df$feature == "Baseline", "mae"]))
+df
+```
+
+```{r}
+rm(arframe, xdata, epochs, istrain, model, n, n_lags, n_neurons, xrnn, y_true, ydata, zero_rule_acc, lagm, cm, history, result, kpred)
+```
+
+
+
 # Baseline Model: Logistic Regression 
 
 ## Logistic Regression with PCA
@@ -580,6 +672,8 @@ rm(arframe, xdata, epochs, istrain, model, n, n_lags, n_neurons, xrnn, y_true, y
 -- consider line plot from EDA 
 
 # Bidirectional LSTM
+
+
 ```{r}
 epochs <- 50
 n_neurons <- 25
@@ -600,10 +694,10 @@ model %>% compile ( optimizer = optimizer_rmsprop() ,
                     metrics = c("accuracy") )
 history <- model %>% 
   fit(xrnn[ istrain , , ] , arframe[ istrain , "open" ] ,
-       batch_size = 50 , epochs = epochs ,
-       validation_data = list ( xrnn [! istrain , , ] , arframe [! istrain , "open" ]), 
+      batch_size = 50 , epochs = epochs ,
+      validation_data = list ( xrnn [! istrain , , ] , arframe [! istrain , "open" ]), 
       verbose = 0
-)
+  )
 kpred <- predict ( model , xrnn [! istrain , , ])
 y_true <- factor(matrix(ydata[!istrain]))
 kpred <- factor(round(kpred,0))
@@ -624,105 +718,6 @@ all_results <- accuracy_table(result,train_y = ydata[istrain], "Bidir LSTM 25 Ne
 rm(arframe, xdata, epochs, istrain, model, n, n_lags, n_neurons, xrnn, y_true, ydata, zero_rule_acc, lagm, cm, history, result, kpred)
 ```
 
-## Bidirectional LSTM All Neurons
-```{r}
-epochs <- 50
-n_neurons <- ncol(data_clean)-1
-n_lags <- 5
-
-out <- data_prep_lag(data_clean ,n_neurons )
-xrnn <- out[[1]]
-arframe <-  out[[2]]
-istrain <- out[[3]]
-ydata <- arframe$open
-
-
-model <- keras_model_sequential () %>%
-  bidirectional(layer_lstm(units = 50, input_shape = list(n_lags , n_neurons))) %>%
-  layer_dense ( units = 1, activation = "sigmoid")
-model %>% compile ( optimizer = optimizer_rmsprop() ,
-                    loss = "binary_crossentropy",
-                    metrics = c("accuracy") )
-history <- model %>% 
-  fit(xrnn[ istrain , , ] , arframe[ istrain , "open" ] ,
-       batch_size = 50 , epochs = epochs ,
-       validation_data = list ( xrnn [! istrain , , ] , arframe [! istrain , "open" ]), 
-      verbose = 0
-)
-kpred <- predict ( model , xrnn [! istrain , , ])
-y_true <- factor(matrix(ydata[!istrain]))
-kpred <- factor(round(kpred,0))
-
-summary(model)
-
-plot(history)
-
-result <- data.frame(true = y_true, pred = kpred)
-result$true <- factor(result$true, levels = c(0,1))
-result$pred <- factor(result$pred, levels = c(0,1))
-
-
-
-plot_cm(result, "Bidir LSTM All Neurons")
-all_results <- accuracy_table(result, train_y = ydata[istrain],"Bidir LSTM All Neurons", all_results)
-```
-
-
-
-
-```{r}
-# COMPUTE BASELINE (NO SHUFFLE)
-oof_preds <- kpred
-y_valid <- y_true
-baseline_mae = mean(abs( oof_preds-y_valid ))
-
-results <- NULL
-results <- c(results, c("feature" = "Baseline", "mae" = baseline_mae))
-
-X_valid <- xrnn[istrain,,]
-dim(xrnn)
-
-
-#for (k in 1:dim(xrnn)[3]){
-  # SHUFFLE FEATURE K
-  k <- 1
-  save_col <-  X_valid[,,k]
-  X_valid[,,k] <-X_valid[sample(1:nrow(X_valid)),, ]
-
-  
-  #-------left off here
-  # COMPUTE OOF MAE WITH FEATURE K SHUFFLED
-  oof_preds = model.predict(X_valid, verbose=0).squeeze()
-  mae = np.mean(np.abs( oof_preds-y_valid ))
-  results.append({'feature':COLS[k],'mae':mae})
-  X_valid[:,:,k] = save_col
-}
-
-# DISPLAY LSTM FEATURE IMPORTANCE
-print()
-df = pd.DataFrame(results)
-df = df.sort_values('mae')
-plt.figure(figsize=(10,20))
-plt.barh(np.arange(len(COLS)+1),df.mae)
-plt.yticks(np.arange(len(COLS)+1),df.feature.values)
-plt.title('LSTM Feature Importance',size=16)
-plt.ylim((-1,len(COLS)+1))
-plt.plot([baseline_mae,baseline_mae],[-1,len(COLS)+1], '--', color='orange',
-         label=f'Baseline OOF\nMAE={baseline_mae:.3f}')
-plt.xlabel(f'Fold {fold+1} OOF MAE with feature permuted',size=14)
-plt.ylabel('Feature',size=14)
-plt.legend()
-plt.show()
-
-exit
-```
-
-
-
-
-```{r}
-rm(arframe, xdata, epochs, istrain, model, n, n_lags, n_neurons, xrnn, y_true, ydata, zero_rule_acc, lagm, cm, history, result, kpred)
-```
 
 
 
