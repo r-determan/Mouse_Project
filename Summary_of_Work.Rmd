@@ -177,7 +177,7 @@ data_prep_lag <- function(data_clean, n_neurons, random_split = 0){
 # Final Model 
 ## Bidirectional LSTM All Neurons
 ```{r}
-epochs <- 50
+epochs <- 100
 n_neurons <- ncol(data_clean)-1
 n_lags <- 5
 
@@ -232,13 +232,11 @@ results <- NULL
 results <- c(results, c("feature" = "Baseline", "mae" = baseline_mae))
 
 X_valid <- xrnn[istrain,,]
-dim(xrnn)
 
+set.seed(505)
 
 for (k in 1:dim(xrnn)[3]){
-  #for(k in c(1,2)) {
-  x <- 1
-  if(k%%10 == 0){print(k)}
+  #if(k%%10 == 0){print(k)}
   # SHUFFLE FEATURE K
   save_col <-  X_valid[,,k]
   dim(X_valid[,,k])
@@ -276,13 +274,15 @@ ggplot(data =data_plots, mapping = aes(x = time, y = value,  color = as.factor(o
 ```
 ## Try for all mice
 ```{r}
-epochs <- 50
+epochs <- 100
 n_lags <- 5
 all_mice_bdlstm <- NULL
+feat_imp <- data.frame("neurons" = as.character(1:122))
 
-for (mouse in unique(bz_all$df)){
-  mouse
-  data <- bz_all %>% filter(df == mouse) %>% select(-c(df, closed)) %>% pivot_wider() %>% select(-time)
+for (mouse in unique(bz_all$df)[1:3]){
+  result <- NULL
+  print(mouse)
+  data <- bz_all %>% filter(df == mouse) %>% select(-c(df)) %>% pivot_wider() %>% select(-time)
   n_neurons <- ncol(data)-1
   
   
@@ -315,8 +315,8 @@ for (mouse in unique(bz_all$df)){
   result$pred <- factor(result$pred, levels = c(0,1))
 
   all_mice_bdlstm <- accuracy_table(result, train_y = ydata[istrain],mouse, all_mice_bdlstm)
-
-}
+   
+   }
 
 
 ggplot(data = all_mice_bdlstm,aes(x = model_name))+
@@ -324,7 +324,6 @@ ggplot(data = all_mice_bdlstm,aes(x = model_name))+
   geom_point(aes(y = model_acc, color = "Model Accuracy"), size = 3)+
   geom_point(aes(y = zero_rule_acc, color = "Zero Rule Accuracy"), size = 3)+
   labs(x = "Mouse ID", y = "Accuracy", title = "Accuracy of Test Data for Each Mouse/Model", subtitle= "One Bidirectional LSTM Model fit for each mouse w/ all available neurons", color = "Accuracy")
-names(all_mice_bdlstm)
 
 ```
 
@@ -372,7 +371,7 @@ result <- data.frame(true = factor(testing$open),
                      pred = factor(pred_logis))
 plot_cm(result = result, title = "Logistic Reg w/ PCA")
 all_results <- accuracy_table(result, training$open,
-                              title = "Logistic Reg w/ PCA", 
+                              title = "Logistic Reg w/ PCA (chunk)", 
                               all_results = all_results)
 
 rm(comp, eigenvalue, mdl_data.pca, mdl_logis, training, testing, error_rate, pred_logis, train, zero_rule_acc, cm)
@@ -396,8 +395,8 @@ for (id in unique(bz_all$df)){
   # fit model
   comp$open <- mdl_data$open
   
-  set.seed(1)
-  train <- sample(1:nrow(comp), size = round(.8*nrow(comp)), replace = FALSE)
+
+  train <- seq(1, round(.8*nrow(comp)))
   training <- comp[train,]
   testing <- comp[-train,]
   
