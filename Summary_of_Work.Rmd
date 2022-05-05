@@ -120,6 +120,13 @@ accuracy_table <- function(result, train_y, title = "",  all_results){
 }
 
 n_lags <- 5
+#create lag function
+lagm <- function (x, k = 1) {
+    n <- nrow (x)
+    pad <- matrix (NA , k, ncol (x))
+    rbind (pad , x[1:(n - k), ])
+}
+
 data_prep_lag <- function(data_clean, n_neurons, random_split = 0){
   #n_neurons <- ncol(data_clean)-1
   n_lags <- 5
@@ -127,12 +134,7 @@ data_prep_lag <- function(data_clean, n_neurons, random_split = 0){
   #data_mat <- data.matrix(data_clean %>% select(-closed))
   xdata <- data.matrix(data_clean %>% select(-c(open)) %>% select(seq(1,n_neurons)))
   ydata <- data.matrix(data_clean %>% select(open))
-  #create lag function
-  lagm <- function (x, k = 1) {
-    n <- nrow (x)
-    pad <- matrix (NA , k, ncol (x))
-    rbind (pad , x[1:(n - k), ])
-   }
+
   #make lags
   arframe <- data.frame ( open = ydata ,
   L1 = lagm ( xdata , 1) , L2 = lagm ( xdata , 2),
