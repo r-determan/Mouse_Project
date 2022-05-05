@@ -261,6 +261,76 @@ df
 ```
 
 ```{r}
+data_plots <- data_clean %>% 
+  select(open, X31, X98, X72, X16, X106, X33) %>% 
+  mutate(time = 1:nrow(data_clean)) %>% 
+  pivot_longer(cols = X31:X33) %>% 
+  mutate(high_importance = name == "X31" | name == "X98" | name == "X72")
+
+ggplot(data =data_plots, mapping = aes(x = time, y = value,  color = as.factor(open)))+
+  geom_line(aes(group =1), alpha = 0.35)+
+  facet_wrap(high_importance~name)+
+  labs(title= "Neuron Activity for Mouse 409\n Low importance vs High importance variables", y = "Z-score", color = "Open?")
+ 
+
+```
+## Try for all mice
+```{r}
+epochs <- 50
+n_lags <- 5
+all_mice_bdlstm <- NULL
+
+for (mouse in unique(bz_all$df)){
+  mouse
+  data <- bz_all %>% filter(df == mouse) %>% select(-c(df, closed)) %>% pivot_wider() %>% select(-time)
+  n_neurons <- ncol(data)-1
+  
+  
+  out <- data_prep_lag(data ,n_neurons )
+  xrnn <- out[[1]]
+  arframe <-  out[[2]]
+  istrain <- out[[3]]
+  ydata <- arframe$open
+
+  
+  model <- keras_model_sequential () %>%
+    bidirectional(layer_lstm(units = 50, input_shape = list(n_lags , n_neurons))) %>%
+    layer_dense ( units = 1, activation = "sigmoid")
+  model %>% compile ( optimizer = optimizer_rmsprop() ,
+                      loss = "binary_crossentropy",
+                      metrics = c("accuracy") )
+  history <- model %>% 
+    fit(xrnn[ istrain , , ] , arframe[ istrain , "open" ] ,
+        batch_size = 50 , epochs = epochs ,
+        validation_data = list ( xrnn [! istrain , , ] , arframe [! istrain , "open" ]), 
+        verbose = 0
+  )
+  kpred <- predict ( model , xrnn [! istrain , , ])
+  y_true <- factor(matrix(ydata[!istrain]))
+  kpred <- factor(round(kpred,0))
+    
+    
+  result <- data.frame(true = y_true, pred = kpred)
+  result$true <- factor(result$true, levels = c(0,1))
+  result$pred <- factor(result$pred, levels = c(0,1))
+
+  all_mice_bdlstm <- accuracy_table(result, train_y = ydata[istrain],mouse, all_mice_bdlstm)
+
+}
+
+
+ggplot(data = all_mice_bdlstm,aes(x = model_name))+
+  geom_errorbar(aes(ymax = model_acc, ymin = zero_rule_acc, x = model_name,y = model_acc),width = 0)+
+  geom_point(aes(y = model_acc, color = "Model Accuracy"), size = 3)+
+  geom_point(aes(y = zero_rule_acc, color = "Zero Rule Accuracy"), size = 3)+
+  labs(x = "Mouse ID", y = "Accuracy", title = "Accuracy of Test Data for Each Mouse/Model", subtitle= "One Bidirectional LSTM Model fit for each mouse w/ all available neurons", color = "Accuracy")
+names(all_mice_bdlstm)
+
+```
+
+
+
+```{r}
 rm(arframe, xdata, epochs, istrain, model, n, n_lags, n_neurons, xrnn, y_true, ydata, zero_rule_acc, lagm, cm, history, result, kpred)
 ```
 
