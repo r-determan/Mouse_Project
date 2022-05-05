@@ -8,12 +8,10 @@ date: '2022-05-02'
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE, warning = FALSE)
-pacman::p_load(R.matlab, dplyr,tidyr, caret, factoextra, FactoMineR, pROC,stringr,cvms, keras,kerasR)
-
+pacman::p_load(R.matlab, dplyr,tidyr, caret, factoextra, FactoMineR, pROC,stringr,cvms, keras,kerasR,permute)
 ```
 
-
-# Data Pre-processing
+# Data Setup
 ```{r}
 # Import mouse 409 data
 bb <- readMat("Data/Zero_Maze/608034_409/Day_1/Trial_001_0/binned_behavior.mat")
@@ -24,19 +22,17 @@ bz <- data.frame(bz$binned.zscore)
 
 #combine zscore and behavior
 data <- data.frame(cbind(bb, bz))
-data$time <- seq(1:nrow(data))
   
 #remove rows where no location is coded
 data_clean <- data[-which(data$open==0 & data$closed==0),]
-
+data_clean <- data_clean %>% select(-c(closed))
 #select only "open" column as indicator
-mdl_data <- data_clean %>% select(-closed)
+mdl_data <- data_clean 
 
 #remove extra variables
 rm(bb, bz, data)
-```
 
-```{r}
+
 # Import all mice data into one data frame
 # read in our data
 prefix <- "Data/Zero_Maze/"
@@ -93,9 +89,6 @@ all_results <- data.frame(model_name = NULL,
 ```
 
 
-
-
-
 # Functions
 ```{r}
 plot_cm <- function(result, title = ""){
@@ -111,8 +104,13 @@ plot_cm <- function(result, title = ""){
     )) + labs(title = title)
 }
 
-accuracy_table <- function(result,title = "",  all_results){
-  zero_rule_acc <- ifelse(sum(result$true == 0)>sum(result$true == 1), 
+accuracy_table <- function(result, train_y, title = "",  all_results){
+  # select whichever class is larger in the training data set
+  # for testing, always predict the largest class from training set
+
+  n_0 <- sum(train_y == 0)
+  n_1 <- sum(train_y== 1)
+  zero_rule_acc <- ifelse(n_0>n_1, 
                         sum(result$true == 0)/nrow(result),  
                         sum(result$true == 1)/nrow(result))
   all_results <- rbind(all_results, data.frame(model_name = title,
@@ -120,7 +118,6 @@ accuracy_table <- function(result,title = "",  all_results){
                                              model_acc = sum(result$true == result$pred)/nrow(result)))
   return(all_results)
 }
-
 
 n_lags <- 5
 data_prep_lag <- function(data_clean, n_neurons, random_split = 0){
@@ -144,9 +141,10 @@ data_prep_lag <- function(data_clean, n_neurons, random_split = 0){
   )
   if (random_split == 0){
   #separate train and test
-  istrain <- rep(TRUE, round(nrow(arframe)*0.7/3))
-  istrain <- c(istrain, rep(FALSE,nrow(arframe)/3-round(nrow(arframe)*0.7/3)))
-  istrain <- c(istrain, istrain,istrain, FALSE)}
+  istrain <- rep(TRUE, round(nrow(arframe)*0.7/2))
+  istrain <- c(istrain, rep(FALSE,nrow(arframe)*0.3/2))
+  istrain <- c(istrain,istrain)
+  }
   else{
     istrain <- sample(c(TRUE,FALSE),size = nrow(arframe), prob = c(0.7,0.3), replace = TRUE)
   }
@@ -171,7 +169,6 @@ data_prep_lag <- function(data_clean, n_neurons, random_split = 0){
   
   out <- list(xrnn, arframe, istrain)
 }
-
 ```
 
 
@@ -180,6 +177,7 @@ data_prep_lag <- function(data_clean, n_neurons, random_split = 0){
 ## Logistic Regression with PCA
 
 ### For Mouse 409
+
 ```{r}
 n_pc <- 10
 mdl_data.pca <- PCA(mdl_data[,-1], scale.unit = TRUE, ncp=n_pc, graph = TRUE) #set graph=TRUE can see the arrow plot
@@ -205,9 +203,11 @@ error_rate
 
 pred_logis <- ifelse(pred_logis>=0.5, 1, 0)
 
-plot_cm(result = data.frame(true = factor(testing$open), pred = factor(pred_logis)), title = "Logistic Reg w/ PCA")
-all_results <- accuracy_table(data.frame(true = factor(testing$open),
-                                         pred = factor(pred_logis)),
+
+result <- data.frame(true = factor(testing$open),
+                     pred = factor(pred_logis))
+plot_cm(result = result, title = "Logistic Reg w/ PCA")
+all_results <- accuracy_table(result, training$open,
                               title = "Logistic Reg w/ PCA", 
                               all_results = all_results)
 
@@ -294,7 +294,7 @@ ggplot(data = acc,aes(x = mouse_id))+
   labs(x = "Mouse ID", y = "Accuracy", title = "Accuracy of Test Data for Each Mouse/Model", subtitle= "Where \"Zero Rule\" is always selecting the larger class \nGoal = Model Acc > Zero Rule Acc", color = "Accuracy")
 
 
-rm(cm, comp, data_clean, eigenvalue, logisROC, mdl_data, mdl_data.pca, mdl_logis, results,
+rm(cm, comp, eigenvalue, logisROC, mdl_data, mdl_data.pca, mdl_logis, results,
    roc_251, roc_254, roc_255, roc_256,roc_257, roc_258, roc_274, roc_409, roc_412, roc_414, roc_416, roc_417, roc_418, 
    testing, training, error_rate, id, n_pc, plt, pred_logis, train, acc, bz_all)
 ```
@@ -309,26 +309,9 @@ rm(cm, comp, data_clean, eigenvalue, logisROC, mdl_data, mdl_data.pca, mdl_logis
 **Areas still to improve:** The simple neural network does not take into account the time series element of the data. It predicts the current location based on the current state of the neurons. 
 
 ```{r}
-# Import mouse 409 data
-bb <- readMat("Data/Zero_Maze/608034_409/Day_1/Trial_001_0/binned_behavior.mat")
-bb <- data.frame(t(bb$binned.behavior))
-names(bb) <- c("open", "closed")
-
-bz <- readMat("Data/Zero_Maze/608034_409/Day_1/Trial_001_0/binned_zscore.mat")
-bz <- data.frame(bz$binned.zscore)
-
-data <- data.frame(cbind(bb, bz))
-data$time <- seq(1:nrow(data))
-
-data_clean <- data[-which(data$open==0 & data$closed==0),]
-
-rm(bb, bz, data)
-```
-
-```{r}
 istrain <- sample(c(TRUE, FALSE), size = nrow(data_clean), replace = TRUE, prob = c(0.7, 0.3))
 
-data_clean <- data_clean %>% mutate(open = as.numeric(open)) %>% select(-c(closed, time))
+data_clean <- data_clean %>% mutate(open = as.numeric(open))
 
 
 train <- data_clean[istrain,]
@@ -343,9 +326,7 @@ X_test <- test %>% select(-c(open))
 X_test <- as.matrix(X_test)
 y_test <- test %>% select(open)
 y_test <- as.matrix(y_test)
-```
 
-```{r}
 model <- keras_model_sequential() 
 
 # Add layers to the model
@@ -379,7 +360,7 @@ plot(history)
 result <- data.frame(true = factor(y_test), pred = factor(pred))
 
 plot_cm(result = result, title = "Neural Net")
-all_results <- accuracy_table(result,
+all_results <- accuracy_table(result,train_y = y_train,
                               title = "Neural Net", 
                               all_results = all_results)
 
@@ -427,7 +408,7 @@ plot(history)
 result <- data.frame(true =y_true, pred = kpred)
 
 plot_cm(result = result, title = "Incorrect RNN")
-all_results <- accuracy_table(result,
+all_results <- accuracy_table(result,train_y = ydata[istrain],
                               title = "Incorrect RNN", 
                               all_results = all_results)
 
@@ -436,7 +417,6 @@ rm(arframe, xdata, epochs, istrain, model, n, n_neurons, xrnn, y_true, ydata, ze
 
 ## Correct RNN: Mouse 409
 ### 25 neurons
-
 ```{r}
 n_neurons <- 25
 n_lags <- 5
@@ -473,7 +453,7 @@ plot(history)
 
 result <- data.frame(true = y_true, pred = kpred)
 plot_cm(result = result, title = "Correct RNN")
-all_results <- accuracy_table(result,
+all_results <- accuracy_table(result, train_y = ydata[istrain],
                               title = "Correct RNN", 
                               all_results = all_results)
 
@@ -523,7 +503,7 @@ result <- data.frame(true = y_true, pred = kpred)
 
 
 plot_cm(result = result, title = "Correct RNN w/ all neurons")
-all_results <- accuracy_table(result,
+all_results <- accuracy_table(result,train_y = ydata[istrain],
                               title = "Correct RNN w/ all neurons", 
                               all_results = all_results)
 
@@ -531,27 +511,88 @@ rm(arframe, xdata, epochs, istrain, model, n, n_lags, n_neurons, xrnn, y_true, y
 ```
 
 
+<!-- # GO BACK Correct RNN w/ all neurons for all mice -->
+<!-- ```{r} -->
+<!-- plt <- ggplot() -->
+<!-- results <- data.frame(pred = NULL, true = NULL) -->
+<!-- best_model_results <- NULL -->
+
+<!-- plt <- NULL -->
+<!-- for (id in unique(bz_all$df)){ -->
+<!--   data_clean<- bz_all %>% filter(df == id) %>% pivot_wider() %>% select(-c(df,time)) -->
+<!--   epochs <- 100 -->
+<!--   n_neurons <- ncol(data_clean)-1  -->
+
+<!--   out <- data_prep_lag(data_clean ,n_neurons ) -->
+<!--   xrnn <- out[[1]] -->
+<!--   arframe <-  out[[2]] -->
+<!--   n_lags <- 5 -->
+<!--   istrain <- out[[3]] -->
+<!--   ydata <- arframe$open -->
 
 
-# LSTM
+<!--   model <- keras_model_sequential () %>% -->
+<!--     layer_simple_rnn ( units = 100 ,  -->
+<!--                        input_shape = list (n_lags , n_neurons) , -->
+<!--                        activation = "relu") %>% -->
+<!--     layer_dense ( units = 50, activation = "relu") %>%  -->
+<!--     layer_dense ( units = 1, activation = "sigmoid") -->
+<!--   model %>% compile ( optimizer = optimizer_rmsprop() , -->
+<!--                       loss = "binary_crossentropy", -->
+<!--                       metrics = c("accuracy") ) -->
+<!--   history <- model %>%  -->
+<!--     fit(xrnn[ istrain , , ] , arframe[ istrain , "open" ] , -->
+<!--          batch_size = 50 , epochs = epochs , -->
+<!--          validation_data = list ( xrnn [! istrain , , ] , arframe [! istrain , "open" ]),  -->
+<!--         verbose = 0 -->
+<!--   ) -->
+<!--   kpred <- predict ( model , xrnn [! istrain , , ]) -->
+<!--   y_true <- factor(matrix(ydata[!istrain])) -->
+<!--   kpred <- factor(round(kpred,0)) -->
 
-The model seems to learn very quickly and then fails to improve... "A new random input sequence will be generated each epoch for the network to be fit on. This ensures that the model does not memorize a single sequence and instead can generalize a solution to solve all possible random input sequences for this problem."
+<!--   #summary(model) -->
 
+<!--   plot(history) -->
+
+<!--   result <- data.frame(true = y_true, pred = kpred) -->
+
+
+<!--   #plot_cm(result = result, title = "Correct RNN w/ all neurons") -->
+<!--   best_model_results <- accuracy_table(result,train_y = ydata[istrain], -->
+<!--                                 title = paste(id) , -->
+<!--                                 all_results = best_model_results) -->
+
+
+<!-- } -->
+
+
+
+<!-- ggplot(data = best_model_results,aes(x = model_name))+ -->
+<!--   geom_errorbar(aes(ymax = model_acc, ymin = zero_rule_acc, x = model_name,y =model_acc ),width = 0)+ -->
+<!--   geom_point(aes(y = model_acc, color = "Model Accuracy"), size = 3)+ -->
+<!--   geom_point(aes(y =zero_rule_acc , color = "Zero Rule Accuracy"), size = 3)+ -->
+<!--   labs(x = "Mouse ID", y = "Accuracy", title = "Accuracy of Test Data for Each Mouse/Model", subtitle= "Where \"Zero Rule\" is always selecting the larger class \nGoal = Model Acc > Zero Rule Acc", color = "Accuracy") -->
+<!-- ``` -->
+
+-- explore variable importance  (0.7/0.3 split)
+-- consider line plot from EDA 
+
+# Bidirectional LSTM
 ```{r}
 epochs <- 50
 n_neurons <- 25
 n_lags <- 5
+
 out <- data_prep_lag(data_clean ,n_neurons )
 xrnn <- out[[1]]
 arframe <-  out[[2]]
 istrain <- out[[3]]
 ydata <- arframe$open
-```
 
-```{r}
+
 model <- keras_model_sequential () %>%
-  layer_lstm(n_lags*2, input_shape = list(n_lags , n_neurons), return_sequences = TRUE) %>% 
-  time_distributed(layer_dense ( units = 1, activation = "sigmoid"))
+  bidirectional(layer_lstm(units = 50, input_shape = list(n_lags , n_neurons))) %>%
+  layer_dense ( units = 1, activation = "sigmoid")
 model %>% compile ( optimizer = optimizer_rmsprop() ,
                     loss = "binary_crossentropy",
                     metrics = c("accuracy") )
@@ -570,29 +611,23 @@ summary(model)
 plot(history)
 
 result <- data.frame(true = y_true, pred = kpred)
-
-if(sum(result$true==1)>0.5*nrow(result)){ #if there are more 1s than 0s
-  print(paste("Zero Rule Accuracy:", 
-              round(sum(result$true==1)/nrow(result),4)))
-} else{ print(paste("Zero Rule Accuracy:",
-                    round(sum(result$true==0)/nrow(result),4))) }
-
 result$true <- factor(result$true, levels = c(0,1))
 result$pred <- factor(result$pred, levels = c(0,1))
 
-plot_cm(result = result, title = "LSTM")
-all_results <- accuracy_table(result,
-                              title = "LSTM", 
-                              all_results = all_results)
+
+
+plot_cm(result, "Bidir LSTM 25 Neurons")
+all_results <- accuracy_table(result,train_y = ydata[istrain], "Bidir LSTM 25 Neurons", all_results)
 
 rm(arframe, xdata, epochs, istrain, model, n, n_lags, n_neurons, xrnn, y_true, ydata, zero_rule_acc, lagm, cm, history, result, kpred)
 ```
 
-
+## Bidirectional LSTM All Neurons
 ```{r}
 epochs <- 50
-n_neurons <- ncol(data_clean)-1 
+n_neurons <- ncol(data_clean)-1
 n_lags <- 5
+
 out <- data_prep_lag(data_clean ,n_neurons )
 xrnn <- out[[1]]
 arframe <-  out[[2]]
@@ -601,8 +636,8 @@ ydata <- arframe$open
 
 
 model <- keras_model_sequential () %>%
-  layer_lstm(n_lags*2, input_shape = list(n_lags , n_neurons), return_sequences = TRUE) %>% 
-  time_distributed(layer_dense ( units = 1, activation = "sigmoid"))
+  bidirectional(layer_lstm(units = 50, input_shape = list(n_lags , n_neurons))) %>%
+  layer_dense ( units = 1, activation = "sigmoid")
 model %>% compile ( optimizer = optimizer_rmsprop() ,
                     loss = "binary_crossentropy",
                     metrics = c("accuracy") )
@@ -626,11 +661,67 @@ result$pred <- factor(result$pred, levels = c(0,1))
 
 
 
-plot_cm(result, "LSTM All Neurons")
-accuracy_table(result, "LSTM All Neurons", all_results)
-
-#rm(arframe, xdata, epochs, istrain, model, n, n_lags, n_neurons, xrnn, y_true, ydata, zero_rule_acc, lagm, cm, history, result, kpred)
+plot_cm(result, "Bidir LSTM All Neurons")
+all_results <- accuracy_table(result, train_y = ydata[istrain],"Bidir LSTM All Neurons", all_results)
 ```
+
+
+
+
+```{r}
+# COMPUTE BASELINE (NO SHUFFLE)
+oof_preds <- kpred
+y_valid <- y_true
+baseline_mae = mean(abs( oof_preds-y_valid ))
+
+results <- NULL
+results <- c(results, c("feature" = "Baseline", "mae" = baseline_mae))
+
+X_valid <- xrnn[istrain,,]
+dim(xrnn)
+
+
+#for (k in 1:dim(xrnn)[3]){
+  # SHUFFLE FEATURE K
+  k <- 1
+  save_col <-  X_valid[,,k]
+  X_valid[,,k] <-X_valid[sample(1:nrow(X_valid)),, ]
+
+  
+  #-------left off here
+  # COMPUTE OOF MAE WITH FEATURE K SHUFFLED
+  oof_preds = model.predict(X_valid, verbose=0).squeeze()
+  mae = np.mean(np.abs( oof_preds-y_valid ))
+  results.append({'feature':COLS[k],'mae':mae})
+  X_valid[:,:,k] = save_col
+}
+
+# DISPLAY LSTM FEATURE IMPORTANCE
+print()
+df = pd.DataFrame(results)
+df = df.sort_values('mae')
+plt.figure(figsize=(10,20))
+plt.barh(np.arange(len(COLS)+1),df.mae)
+plt.yticks(np.arange(len(COLS)+1),df.feature.values)
+plt.title('LSTM Feature Importance',size=16)
+plt.ylim((-1,len(COLS)+1))
+plt.plot([baseline_mae,baseline_mae],[-1,len(COLS)+1], '--', color='orange',
+         label=f'Baseline OOF\nMAE={baseline_mae:.3f}')
+plt.xlabel(f'Fold {fold+1} OOF MAE with feature permuted',size=14)
+plt.ylabel('Feature',size=14)
+plt.legend()
+plt.show()
+
+exit
+```
+
+
+
+
+```{r}
+rm(arframe, xdata, epochs, istrain, model, n, n_lags, n_neurons, xrnn, y_true, ydata, zero_rule_acc, lagm, cm, history, result, kpred)
+```
+
 
 
 # Summary
@@ -647,8 +738,3 @@ ggplot(data = all_results,aes(x = model_name))+
 all_results %>%mutate(across(where(is.numeric), round, digits = 4),
                       model_better = model_acc> zero_rule_acc) %>%  knitr::kable()
 ```
-
-
-
-
-# Bidirectional LSTM 
