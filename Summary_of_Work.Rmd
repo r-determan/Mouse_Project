@@ -330,7 +330,7 @@ ggplot(data = all_mice_bdlstm,aes(x = model_name))+
 
 
 ```{r}
-rm(arframe, xdata, epochs, istrain, model, n, n_lags, n_neurons, xrnn, y_true, ydata, zero_rule_acc, lagm, cm, history, result, kpred)
+rm(arframe, xdata, epochs, istrain, model, n, n_lags, n_neurons, xrnn, y_true, ydata, zero_rule_acc, cm, history, result, kpred)
 ```
 
 
@@ -352,10 +352,11 @@ comp <- data.frame(mdl_data.pca$ind$coord)
 
 # fit model
 comp$open <- mdl_data$open
-set.seed(1)
-train <- seq(1, round(.7*nrow(comp)))
+train <- rep(TRUE, round(nrow(comp)*0.7/2))
+train <- c(train, rep(FALSE,nrow(comp)*0.3/2))
+train <- c(train,train)
 training <- comp[train,]
-testing <- comp[-train,]
+testing <- comp[!train,]
 
 mdl_logis <- glm(open~., data = training, family = binomial("logit"))
 summary(mdl_logis)
@@ -394,13 +395,12 @@ for (id in unique(bz_all$df)){
   # fit model
   comp$open <- mdl_data$open
   
-  set.seed(1)
-  train <- seq(1, round(.6*nrow(comp))) ##mouse 412 has only closed arm in last 30% time period
-
-  #train <- seq(1, round(.8*nrow(comp)))
+  train <- rep(TRUE, round(nrow(comp)*0.7/2))
+  train <- c(train, rep(FALSE,nrow(comp)*0.3/2))
+  train <- c(train,train)
   training <- comp[train,]
-  testing <- comp[-train,]
-  
+  testing <- comp[!train,]
+
   mdl_logis <- glm(open~., data = training, family = binomial("logit"))
   pred_logis <- predict(mdl_logis, newdata = testing, type = "response")
   error_rate <- mean((pred_logis>.5 & testing$open == 0) | (pred_logis<.5 & testing$open == 1))
@@ -472,7 +472,11 @@ rm(cm, comp, eigenvalue, logisROC, mdl_data, mdl_data.pca, mdl_logis, results,
 ```{r}
 ##mouse 409
 #istrain <- sample(c(TRUE, FALSE), size = nrow(data_clean), replace = TRUE, prob = c(0.7, 0.3))
-istrain <- seq(1, round(0.7*nrow(data_clean)))
+#istrain <- seq(1, round(0.7*nrow(data_clean)))
+istrain <- rep(TRUE, round(nrow(data_clean)*0.7/2))
+istrain <- c(istrain, rep(FALSE,nrow(data_clean)*0.3/2))
+istrain <- c(istrain,istrain)
+
 data_clean <- data_clean %>% mutate(open = as.numeric(open))
 
 
@@ -483,7 +487,7 @@ X_train <- as.matrix(X_train)
 y_train <- train %>% select(open)
 y_train <- as.matrix(y_train)
 
-test <-  data_clean[-istrain,]
+test <-  data_clean[!istrain,]
 X_test <- test %>% select(-c(open))
 X_test <- as.matrix(X_test)
 y_test <- test %>% select(open)
@@ -541,7 +545,9 @@ data_clean <- data_clean %>% mutate(open = as.numeric(open))
 for (i in 1:5){
   behav <- c(rep(NA,i), data_clean$open[1:(length(data_clean$open)-i)])
   data_clean_behav <- cbind(behav, data_clean %>% select(-c(open))) %>% na.omit()
-  istrain <- seq(1,round(0.7*nrow(data_clean_behav)))
+istrain <- rep(TRUE, round(nrow(data_clean_behav)*0.7/2))
+istrain <- c(istrain, rep(FALSE,nrow(data_clean_behav)*0.3/2))
+istrain <- c(istrain,istrain)
   
 train <- data_clean_behav[istrain,]
 X_train <- train %>% select(-c(behav))
@@ -550,7 +556,7 @@ X_train <- as.matrix(X_train)
 y_train <- train %>% select(behav)
 y_train <- as.matrix(y_train)
 
-test <-  data_clean_behav[-istrain,]
+test <-  data_clean_behav[!istrain,]
 X_test <- test %>% select(-c(behav))
 X_test <- as.matrix(X_test)
 y_test <- test %>% select(behav)
@@ -698,7 +704,7 @@ all_results <- accuracy_table(result, train_y = ydata[istrain],
                               title = "Correct RNN", 
                               all_results = all_results)
 
-rm(arframe, xdata, epochs, istrain, model, n, n_lags, n_neurons, xrnn, y_true, ydata, zero_rule_acc, lagm, cm, history, result, kpred)
+rm(arframe, xdata, epochs, istrain, model, n, n_lags, n_neurons, xrnn, y_true, ydata, zero_rule_acc, cm, history, result, kpred)
 
 ```
 
@@ -748,7 +754,7 @@ all_results <- accuracy_table(result,train_y = ydata[istrain],
                               title = "Correct RNN w/ all neurons", 
                               all_results = all_results)
 
-rm(arframe, xdata, epochs, istrain, model, n, n_lags, n_neurons, xrnn, y_true, ydata, zero_rule_acc, lagm, cm, history, result, kpred)
+rm(arframe, xdata, epochs, istrain, model, n, n_lags, n_neurons, xrnn, y_true, ydata, zero_rule_acc, cm, history, result, kpred)
 ```
 
 
