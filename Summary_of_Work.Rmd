@@ -171,6 +171,15 @@ data_prep_lag <- function(data_clean, n_neurons, random_split = 0){
   
   out <- list(xrnn, arframe, istrain)
 }
+
+mcc <- function(y_true, y_pred){
+ TP <- sum((y_true == 1)&(y_pred == 1))
+ FP <- sum((y_true == 0)&(y_pred == 1))
+ TN <- sum((y_true == 0)&(y_pred == 0))
+ FN <- sum((y_true == 1)&(y_pred == 0))
+ MCC <- ((TP*TN)-(FP*FN))/sqrt((TP+FP)*(TP+FN)*(TN+FP)*(TN+FN))
+return(1 - MCC)
+}
 ```
 
 
@@ -352,6 +361,7 @@ comp <- data.frame(mdl_data.pca$ind$coord)
 
 # fit model
 comp$open <- mdl_data$open
+
 train <- rep(TRUE, round(nrow(comp)*0.7/2))
 train <- c(train, rep(FALSE,nrow(comp)*0.3/2))
 train <- c(train,train)
@@ -370,9 +380,9 @@ pred_logis <- ifelse(pred_logis>=0.5, 1, 0)
 
 result <- data.frame(true = factor(testing$open),
                      pred = factor(pred_logis))
-plot_cm(result = result, title = "Logistic Reg w/ PCA")
+plot_cm(result = result, title = "Logistic Reg w/ PCA (first 25 PCs)")
 all_results <- accuracy_table(result, training$open,
-                              title = "Logistic Reg w/ PCA", 
+                              title = "Logistic Reg w/ PCA (first 25 PCs)", 
                               all_results = all_results)
 
 rm(comp, eigenvalue, mdl_data.pca, mdl_logis, training, testing, error_rate, pred_logis, train, zero_rule_acc, cm)
@@ -519,9 +529,9 @@ pred <- ifelse(pred>=0.5, 1, 0)
 #plot_model(model )
 
 
-summary(model)
+#summary(model)
 
-plot(history)
+#plot(history)
 
 result <- data.frame(true = factor(y_test), pred = factor(pred))
 
@@ -533,6 +543,73 @@ all_results <- accuracy_table(result,train_y = y_train,
 rm(result, zero_rule_acc, cm, model, pred, train, test, history, X_test, X_train, y_test,y_train, istrain)
 
 ```
+**Improvement we try: Use MCC as loss function to deal with data imbalance.** 
+
+```{r}
+# ##mouse 409
+# istrain <- rep(TRUE, round(nrow(data_clean)*0.7/2))
+# istrain <- c(istrain, rep(FALSE,nrow(data_clean)*0.3/2))
+# istrain <- c(istrain,istrain)
+# 
+# data_clean <- data_clean %>% mutate(open = as.numeric(open))
+# 
+# 
+# train <- data_clean[istrain,]
+# X_train <- train %>% select(-c(open))
+# X_train <- as.matrix(X_train)
+# 
+# y_train <- train %>% select(open)
+# y_train <- as.matrix(y_train)
+# 
+# test <-  data_clean[!istrain,]
+# X_test <- test %>% select(-c(open))
+# X_test <- as.matrix(X_test)
+# y_test <- test %>% select(open)
+# y_test <- as.matrix(y_test)
+# 
+# model <- keras_model_sequential() 
+# 
+# # Add layers to the model
+# model %>% 
+#     layer_dense(units = 100, activation = 'relu', input_shape = c(ncol(X_train))) %>% 
+#     layer_dense(units = 50, activation = 'relu') %>% 
+#     layer_dense(units = 1, activation = 'sigmoid')
+# 
+# 
+# history <- model %>% 
+#   compile(
+#    loss = "mcc",
+#    optimizer = optimizer_rmsprop(),
+#    metrics = c("accuracy"),
+# )%>% 
+#   fit(X_train, y_train,
+#               epochs = 100, 
+#               batch_size = 50,
+#               validation_split = 0.3, verbose = 0)
+# 
+# 
+# pred <- model %>% predict(X_test)
+# pred <- ifelse(pred>=0.5, 1, 0)
+# #plot_model(model )
+# 
+# 
+# #summary(model)
+# 
+# #plot(history)
+# 
+# result <- data.frame(true = factor(y_test), pred = factor(pred))
+# 
+# plot_cm(result = result, title = "Neural Net")
+# all_results <- accuracy_table(result,train_y = y_train,
+#                               title = "Neural Net", 
+#                               all_results = all_results)
+# 
+# rm(result, zero_rule_acc, cm, model, pred, train, test, history, X_test, X_train, y_test,y_train, istrain)
+
+```
+
+
+
 
 
 ## Simple Neural Net with Y moves 1~5 position
@@ -542,7 +619,7 @@ rm(result, zero_rule_acc, cm, model, pred, train, test, history, X_test, X_train
 ##mouse 409
 data_clean <- data_clean %>% mutate(open = as.numeric(open))
 
-for (i in 1:5){
+for (i in c(1,5)){
   behav <- c(rep(NA,i), data_clean$open[1:(length(data_clean$open)-i)])
   data_clean_behav <- cbind(behav, data_clean %>% select(-c(open))) %>% na.omit()
 istrain <- rep(TRUE, round(nrow(data_clean_behav)*0.7/2))
