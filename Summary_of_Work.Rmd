@@ -186,7 +186,7 @@ return(1 - MCC)
 # Final Model 
 ## Bidirectional LSTM All Neurons: Mouse 409
 ```{r}
-epochs <- 100
+epochs = 150
 n_neurons <- ncol(data_clean)-1
 n_lags <- 5
 
@@ -281,14 +281,15 @@ ggplot(data =data_plots, mapping = aes(x = time, y = value,  color = as.factor(o
  
 
 ```
+
 ## Try for all mice
 ```{r}
-epochs <- 100
+epochs = 150
 n_lags <- 5
 all_mice_bdlstm <- NULL
 feat_imp <- data.frame("neurons" = as.character(1:122))
 
-for (mouse in unique(bz_all$df)[1:3]){
+for (mouse in unique(bz_all$df)){
   result <- NULL
   print(mouse)
   data <- bz_all %>% filter(df == mouse) %>% select(-c(df)) %>% pivot_wider() %>% select(-time)
@@ -330,8 +331,8 @@ for (mouse in unique(bz_all$df)[1:3]){
 
 ggplot(data = all_mice_bdlstm,aes(x = model_name))+
   geom_errorbar(aes(ymax = model_acc, ymin = zero_rule_acc, x = model_name,y = model_acc),width = 0)+
-  geom_point(aes(y = model_acc, color = "Model Accuracy"), size = 13)+
-  geom_point(aes(y = zero_rule_acc, color = "Zero Rule Accuracy"), size = 13)+
+  geom_point(aes(y = model_acc, color = "Model Accuracy"), size = 3)+
+  geom_point(aes(y = zero_rule_acc, color = "Zero Rule Accuracy"), size = 3)+
   labs(x = "Mouse ID", y = "Accuracy", title = "Accuracy of Test Data for Each Mouse/Model", subtitle= "One Bidirectional LSTM Model fit for each mouse w/ all available neurons", color = "Accuracy")
 
 ```
@@ -460,8 +461,8 @@ ggroc(list("251" = roc_251, "254" = roc_254,
 
 ggplot(data = acc,aes(x = mouse_id))+
   geom_errorbar(aes(ymax = accuracy, ymin = larger_class, x = mouse_id,y = accuracy),width = 0)+
-  geom_point(aes(y = accuracy, color = "Model Accuracy"), size = 13)+
-  geom_point(aes(y = larger_class, color = "Zero Rule Accuracy"), size = 13)+
+  geom_point(aes(y = accuracy, color = "Model Accuracy"), size = 3)+
+  geom_point(aes(y = larger_class, color = "Zero Rule Accuracy"), size = 3)+
   labs(x = "Mouse ID", y = "Accuracy", title = "Accuracy of Test Data for Each Mouse/Model", subtitle= "Where \"Zero Rule\" is always selecting the larger class \nGoal = Model Acc > Zero Rule Acc", color = "Accuracy")
 
 
@@ -519,7 +520,7 @@ history <- model %>%
    metrics = c("accuracy"),
 )%>% 
   fit(X_train, y_train,
-              epochs = 100, 
+              epochs = 150, 
               batch_size = 50,
               validation_split = 0.3, verbose = 0)
 
@@ -655,7 +656,7 @@ history <- model %>%
    metrics = c("accuracy"),
 )%>% 
   fit(X_train, y_train,
-              epochs = 100, 
+              epochs = 150, 
               batch_size = 50,
               validation_split = 0.3, verbose = 0)
 
@@ -699,7 +700,7 @@ lagm <- function (x, k = 1) {
 }
 
 n_neurons <- 25
-epochs <- 100
+epochs = 150
 out <- data_prep_lag(data_clean ,n_neurons , random_split = 1)
 xrnn <- out[[1]]
 arframe <-  out[[2]]
@@ -744,7 +745,7 @@ rm(arframe, xdata, epochs, istrain, model, n, n_neurons, xrnn, y_true, ydata, ze
 ```{r}
 n_neurons <- 25
 n_lags <- 5
-epochs <- 100
+epochs = 150
 out <- data_prep_lag(data_clean ,n_neurons )
 xrnn <- out[[1]]
 arframe <-  out[[2]]
@@ -790,7 +791,7 @@ rm(arframe, xdata, epochs, istrain, model, n, n_lags, n_neurons, xrnn, y_true, y
 
 ### All neurons
 ```{r}
-epochs <- 100
+epochs = 150
 n_neurons <- ncol(data_clean)-1 
 out <- data_prep_lag(data_clean ,n_neurons )
 xrnn <- out[[1]]
@@ -905,7 +906,7 @@ rm(arframe, xdata, epochs, istrain, model, n, n_lags, n_neurons, xrnn, y_true, y
 
 
 ```{r}
-epochs <- 100
+epochs = 150
 n_neurons <- 25
 n_lags <- 5
 
