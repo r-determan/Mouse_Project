@@ -175,7 +175,7 @@ data_prep_lag <- function(data_clean, n_neurons, random_split = 0){
 
 
 # Final Model 
-## Bidirectional LSTM All Neurons
+## Bidirectional LSTM All Neurons: Mouse 409
 ```{r}
 epochs <- 100
 n_neurons <- ncol(data_clean)-1
@@ -214,8 +214,8 @@ result$pred <- factor(result$pred, levels = c(0,1))
 
 
 
-plot_cm(result, "Bidir LSTM All Neurons")
-all_results <- accuracy_table(result, train_y = ydata[istrain],"Bidir LSTM All Neurons", all_results)
+plot_cm(result, "Bidir LSTM")
+all_results <- accuracy_table(result, train_y = ydata[istrain],"Bidir LSTM", all_results)
 ```
 
 
@@ -321,8 +321,8 @@ for (mouse in unique(bz_all$df)[1:3]){
 
 ggplot(data = all_mice_bdlstm,aes(x = model_name))+
   geom_errorbar(aes(ymax = model_acc, ymin = zero_rule_acc, x = model_name,y = model_acc),width = 0)+
-  geom_point(aes(y = model_acc, color = "Model Accuracy"), size = 3)+
-  geom_point(aes(y = zero_rule_acc, color = "Zero Rule Accuracy"), size = 3)+
+  geom_point(aes(y = model_acc, color = "Model Accuracy"), size = 13)+
+  geom_point(aes(y = zero_rule_acc, color = "Zero Rule Accuracy"), size = 13)+
   labs(x = "Mouse ID", y = "Accuracy", title = "Accuracy of Test Data for Each Mouse/Model", subtitle= "One Bidirectional LSTM Model fit for each mouse w/ all available neurons", color = "Accuracy")
 
 ```
@@ -342,7 +342,7 @@ rm(arframe, xdata, epochs, istrain, model, n, n_lags, n_neurons, xrnn, y_true, y
 ### For Mouse 409
 
 ```{r}
-n_pc <- 10
+n_pc <- 25
 mdl_data.pca <- PCA(mdl_data[,-1], scale.unit = TRUE, ncp=n_pc, graph = FALSE) #set graph=TRUE can see the arrow plot
 eigenvalue <- get_eigenvalue(mdl_data.pca) #80:95.6%; 60:90%; 40: 80.8%
 
@@ -359,11 +359,11 @@ training <- comp[train,]
 testing <- comp[!train,]
 
 mdl_logis <- glm(open~., data = training, family = binomial("logit"))
-summary(mdl_logis)
+#summary(mdl_logis)
 
 pred_logis <- predict(mdl_logis, newdata = testing, type = "response")
 error_rate <- mean((pred_logis>.5 & testing$open == 0) | (pred_logis<.5 & testing$open == 1))
-error_rate
+#error_rate
 
 pred_logis <- ifelse(pred_logis>=0.5, 1, 0)
 
@@ -372,7 +372,7 @@ result <- data.frame(true = factor(testing$open),
                      pred = factor(pred_logis))
 plot_cm(result = result, title = "Logistic Reg w/ PCA")
 all_results <- accuracy_table(result, training$open,
-                              title = "Logistic Reg w/ PCA (chunk)", 
+                              title = "Logistic Reg w/ PCA", 
                               all_results = all_results)
 
 rm(comp, eigenvalue, mdl_data.pca, mdl_logis, training, testing, error_rate, pred_logis, train, zero_rule_acc, cm)
@@ -450,8 +450,8 @@ ggroc(list("251" = roc_251, "254" = roc_254,
 
 ggplot(data = acc,aes(x = mouse_id))+
   geom_errorbar(aes(ymax = accuracy, ymin = larger_class, x = mouse_id,y = accuracy),width = 0)+
-  geom_point(aes(y = accuracy, color = "Model Accuracy"), size = 3)+
-  geom_point(aes(y = larger_class, color = "Zero Rule Accuracy"), size = 3)+
+  geom_point(aes(y = accuracy, color = "Model Accuracy"), size = 13)+
+  geom_point(aes(y = larger_class, color = "Zero Rule Accuracy"), size = 13)+
   labs(x = "Mouse ID", y = "Accuracy", title = "Accuracy of Test Data for Each Mouse/Model", subtitle= "Where \"Zero Rule\" is always selecting the larger class \nGoal = Model Acc > Zero Rule Acc", color = "Accuracy")
 
 
@@ -654,9 +654,9 @@ plot(history)
 
 result <- data.frame(true =y_true, pred = kpred)
 
-plot_cm(result = result, title = "Incorrect RNN")
+plot_cm(result = result, title = "Incorrect RNN w/ 25 Neurons")
 all_results <- accuracy_table(result,train_y = ydata[istrain],
-                              title = "Incorrect RNN", 
+                              title = "Incorrect RNN w/ 25 Neurons", 
                               all_results = all_results)
 
 rm(arframe, xdata, epochs, istrain, model, n, n_neurons, xrnn, y_true, ydata, zero_rule_acc, cm, history, result, kpred)
@@ -699,9 +699,9 @@ summary(model)
 plot(history)
 
 result <- data.frame(true = y_true, pred = kpred)
-plot_cm(result = result, title = "Correct RNN")
+plot_cm(result = result, title = "Correct RNN w/ 25 Neurons")
 all_results <- accuracy_table(result, train_y = ydata[istrain],
-                              title = "Correct RNN", 
+                              title = "Correct RNN w/ 25 Neurons", 
                               all_results = all_results)
 
 rm(arframe, xdata, epochs, istrain, model, n, n_lags, n_neurons, xrnn, y_true, ydata, zero_rule_acc, cm, history, result, kpred)
@@ -749,9 +749,9 @@ plot(history)
 result <- data.frame(true = y_true, pred = kpred)
 
 
-plot_cm(result = result, title = "Correct RNN w/ all neurons")
+plot_cm(result = result, title = "Correct RNN")
 all_results <- accuracy_table(result,train_y = ydata[istrain],
-                              title = "Correct RNN w/ all neurons", 
+                              title = "Correct RNN", 
                               all_results = all_results)
 
 rm(arframe, xdata, epochs, istrain, model, n, n_lags, n_neurons, xrnn, y_true, ydata, zero_rule_acc, cm, history, result, kpred)
@@ -865,8 +865,8 @@ result$pred <- factor(result$pred, levels = c(0,1))
 
 
 
-plot_cm(result, "Bidir LSTM 25 Neurons")
-all_results <- accuracy_table(result,train_y = ydata[istrain], "Bidir LSTM 25 Neurons", all_results)
+plot_cm(result, "Bidir LSTM w/ 25 Neurons")
+all_results <- accuracy_table(result,train_y = ydata[istrain], "Bidir LSTM w/ 25 Neurons", all_results)
 
 rm(arframe, xdata, epochs, istrain, model, n, n_lags, n_neurons, xrnn, y_true, ydata, zero_rule_acc, lagm, cm, history, result, kpred)
 ```
