@@ -394,13 +394,10 @@ for (id in unique(bz_all$df)){
   # fit model
   comp$open <- mdl_data$open
   
-<<<<<<< HEAD
   set.seed(1)
-  train <- seq(1, round(.6*nrow(comp)))
-=======
+  train <- seq(1, round(.6*nrow(comp))) ##mouse 412 has only closed arm in last 30% time period
 
-  train <- seq(1, round(.8*nrow(comp)))
->>>>>>> ff6a4f1901307d36243f25b9a4a101b75207895c
+  #train <- seq(1, round(.8*nrow(comp)))
   training <- comp[train,]
   testing <- comp[-train,]
   
@@ -473,8 +470,9 @@ rm(cm, comp, eigenvalue, logisROC, mdl_data, mdl_data.pca, mdl_logis, results,
 **Areas still to improve:** The simple neural network does not take into account the time series element of the data. It predicts the current location based on the current state of the neurons. 
 
 ```{r}
-istrain <- sample(c(TRUE, FALSE), size = nrow(data_clean), replace = TRUE, prob = c(0.7, 0.3))
-
+##mouse 409
+#istrain <- sample(c(TRUE, FALSE), size = nrow(data_clean), replace = TRUE, prob = c(0.7, 0.3))
+istrain <- seq(1, round(0.7*nrow(data_clean)))
 data_clean <- data_clean %>% mutate(open = as.numeric(open))
 
 
@@ -485,7 +483,7 @@ X_train <- as.matrix(X_train)
 y_train <- train %>% select(open)
 y_train <- as.matrix(y_train)
 
-test <-  data_clean[!istrain,]
+test <-  data_clean[-istrain,]
 X_test <- test %>% select(-c(open))
 X_test <- as.matrix(X_test)
 y_test <- test %>% select(open)
@@ -507,7 +505,7 @@ history <- model %>%
    metrics = c("accuracy"),
 )%>% 
   fit(X_train, y_train,
-              epochs = 25, 
+              epochs = 100, 
               batch_size = 50,
               validation_split = 0.3, verbose = 0)
 
@@ -532,14 +530,93 @@ rm(result, zero_rule_acc, cm, model, pred, train, test, history, X_test, X_train
 
 ```
 
+
+## Simple Neural Net with Y moves 1~5 position
+**Reason we try this model: Does the behavior impact neural activity? We assume the past location has influence on the current state of the neurons. **
+
+```{r}
+##mouse 409
+data_clean <- data_clean %>% mutate(open = as.numeric(open))
+
+for (i in 1:5){
+  behav <- c(rep(NA,i), data_clean$open[1:(length(data_clean$open)-i)])
+  data_clean_behav <- cbind(behav, data_clean %>% select(-c(open))) %>% na.omit()
+  istrain <- seq(1,round(0.7*nrow(data_clean_behav)))
+  
+train <- data_clean_behav[istrain,]
+X_train <- train %>% select(-c(behav))
+X_train <- as.matrix(X_train)
+
+y_train <- train %>% select(behav)
+y_train <- as.matrix(y_train)
+
+test <-  data_clean_behav[-istrain,]
+X_test <- test %>% select(-c(behav))
+X_test <- as.matrix(X_test)
+y_test <- test %>% select(behav)
+y_test <- as.matrix(y_test)
+
+model <- keras_model_sequential() 
+
+# Add layers to the model
+model %>% 
+    layer_dense(units = 100, activation = 'relu', input_shape = c(ncol(X_train))) %>% 
+    layer_dense(units = 50, activation = 'relu') %>% 
+    layer_dense(units = 1, activation = 'sigmoid')
+
+
+history <- model %>% 
+  compile(
+   loss = "binary_crossentropy",
+   optimizer = optimizer_rmsprop(),
+   metrics = c("accuracy"),
+)%>% 
+  fit(X_train, y_train,
+              epochs = 100, 
+              batch_size = 50,
+              validation_split = 0.3, verbose = 0)
+
+pred <- model %>% predict(X_test)
+pred <- ifelse(pred>=0.5, 1, 0)
+
+result <- data.frame(true = factor(y_test), pred = factor(pred))
+
+all_results <- accuracy_table(result,train_y = y_train,
+                              title = paste0("Neural Net with ", i, " Level Shift of Outcome"), 
+                              all_results = all_results)
+}
+
+
+# result <- data.frame(true = factor(y_test), pred = factor(pred))
+# 
+# plot_cm(result = result, title = "Neural Net with 1 Level Shift of Outcome")
+# all_results <- accuracy_table(result,train_y = y_train,
+#                               title = "Neural Net with 1 Level Shift of Outcome", 
+#                               all_results = all_results)
+
+rm(result, zero_rule_acc, cm, model, pred, train, test, history, X_test, X_train, y_test,y_train, istrain)
+
+```
+
+
+
+
 # Recurrent Neural Network
 
-## Incorrect Version w/ randomly selected train/test
+## Incorrect Version w/ randomly selected train/test : Mouse 409
 **At first, we incorrectly split the training and testing set randomly. The below shows the** ***incorrect*** **model. Interestingly, this incorrectly prepared model performs better than the RNN that is correctly setup in the next section **
 
 ```{r}
+n_lags <- 5
+#create lag function
+lagm <- function (x, k = 1) {
+    n <- nrow (x)
+    pad <- matrix (NA , k, ncol (x))
+    rbind (pad , x[1:(n - k), ])
+}
+
 n_neurons <- 25
-epochs <- 50
+epochs <- 100
 out <- data_prep_lag(data_clean ,n_neurons , random_split = 1)
 xrnn <- out[[1]]
 arframe <-  out[[2]]
@@ -576,7 +653,7 @@ all_results <- accuracy_table(result,train_y = ydata[istrain],
                               title = "Incorrect RNN", 
                               all_results = all_results)
 
-rm(arframe, xdata, epochs, istrain, model, n, n_neurons, xrnn, y_true, ydata, zero_rule_acc, lagm, cm, history, result, kpred)
+rm(arframe, xdata, epochs, istrain, model, n, n_neurons, xrnn, y_true, ydata, zero_rule_acc, cm, history, result, kpred)
 ```
 
 ## Correct RNN: Mouse 409
@@ -584,7 +661,7 @@ rm(arframe, xdata, epochs, istrain, model, n, n_neurons, xrnn, y_true, ydata, ze
 ```{r}
 n_neurons <- 25
 n_lags <- 5
-epochs <- 50
+epochs <- 100
 out <- data_prep_lag(data_clean ,n_neurons )
 xrnn <- out[[1]]
 arframe <-  out[[2]]
@@ -630,7 +707,7 @@ rm(arframe, xdata, epochs, istrain, model, n, n_lags, n_neurons, xrnn, y_true, y
 
 ### All neurons
 ```{r}
-epochs <- 50
+epochs <- 100
 n_neurons <- ncol(data_clean)-1 
 out <- data_prep_lag(data_clean ,n_neurons )
 xrnn <- out[[1]]
@@ -745,7 +822,7 @@ rm(arframe, xdata, epochs, istrain, model, n, n_lags, n_neurons, xrnn, y_true, y
 
 
 ```{r}
-epochs <- 50
+epochs <- 100
 n_neurons <- 25
 n_lags <- 5
 
