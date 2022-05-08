@@ -186,7 +186,11 @@ return(1 - MCC)
 # Final Model 
 ## Bidirectional LSTM All Neurons: Mouse 409
 ```{r}
+<<<<<<< HEAD
 epochs <- 50
+=======
+epochs = 150
+>>>>>>> db618bac4dcd97cf84cc045aae612d576b4255af
 n_neurons <- ncol(data_clean)-1
 n_lags <- 5
 
@@ -281,14 +285,19 @@ ggplot(data =data_plots, mapping = aes(x = time, y = value,  color = as.factor(o
  
 
 ```
+
 ## Try for all mice
 ```{r}
+<<<<<<< HEAD
 epochs <- 50
+=======
+epochs = 150
+>>>>>>> db618bac4dcd97cf84cc045aae612d576b4255af
 n_lags <- 5
 all_mice_bdlstm <- NULL
 feat_imp <- data.frame("neurons" = as.character(1:122))
 
-for (mouse in unique(bz_all$df)[1:3]){
+for (mouse in unique(bz_all$df)){
   result <- NULL
   print(mouse)
   data <- bz_all %>% filter(df == mouse) %>% select(-c(df)) %>% pivot_wider() %>% select(-time)
@@ -519,7 +528,11 @@ history <- model %>%
    metrics = c("accuracy"),
 )%>% 
   fit(X_train, y_train,
+<<<<<<< HEAD
               epochs = 50, 
+=======
+              epochs = 150, 
+>>>>>>> db618bac4dcd97cf84cc045aae612d576b4255af
               batch_size = 50,
               validation_split = 0.3, verbose = 0)
 
@@ -661,7 +674,11 @@ history <- model %>%
    metrics = c("accuracy"),
 )%>% 
   fit(X_train, y_train,
+<<<<<<< HEAD
               epochs = 50, 
+=======
+              epochs = 150, 
+>>>>>>> db618bac4dcd97cf84cc045aae612d576b4255af
               batch_size = 50,
               validation_split = 0.3, verbose = 0)
 
@@ -705,7 +722,11 @@ lagm <- function (x, k = 1) {
 }
 
 n_neurons <- 25
+<<<<<<< HEAD
 epochs <- 50
+=======
+epochs = 150
+>>>>>>> db618bac4dcd97cf84cc045aae612d576b4255af
 out <- data_prep_lag(data_clean ,n_neurons , random_split = 1)
 xrnn <- out[[1]]
 arframe <-  out[[2]]
@@ -750,7 +771,11 @@ rm(arframe, xdata, epochs, istrain, model, n, n_neurons, xrnn, y_true, ydata, ze
 ```{r}
 n_neurons <- 25
 n_lags <- 5
+<<<<<<< HEAD
 epochs <- 50
+=======
+epochs = 150
+>>>>>>> db618bac4dcd97cf84cc045aae612d576b4255af
 out <- data_prep_lag(data_clean ,n_neurons )
 xrnn <- out[[1]]
 arframe <-  out[[2]]
@@ -796,7 +821,11 @@ rm(arframe, xdata, epochs, istrain, model, n, n_lags, n_neurons, xrnn, y_true, y
 
 ### All neurons
 ```{r}
+<<<<<<< HEAD
 epochs <- 50
+=======
+epochs = 150
+>>>>>>> db618bac4dcd97cf84cc045aae612d576b4255af
 n_neurons <- ncol(data_clean)-1 
 out <- data_prep_lag(data_clean ,n_neurons )
 xrnn <- out[[1]]
@@ -911,7 +940,11 @@ rm(arframe, xdata, epochs, istrain, model, n, n_lags, n_neurons, xrnn, y_true, y
 
 
 ```{r}
+<<<<<<< HEAD
 epochs <- 50
+=======
+epochs = 150
+>>>>>>> db618bac4dcd97cf84cc045aae612d576b4255af
 n_neurons <- 25
 n_lags <- 5
 
