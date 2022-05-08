@@ -186,7 +186,7 @@ return(1 - MCC)
 # Final Model 
 ## Bidirectional LSTM All Neurons: Mouse 409
 ```{r}
-epochs <- 100
+epochs <- 50
 n_neurons <- ncol(data_clean)-1
 n_lags <- 5
 
@@ -283,7 +283,7 @@ ggplot(data =data_plots, mapping = aes(x = time, y = value,  color = as.factor(o
 ```
 ## Try for all mice
 ```{r}
-epochs <- 100
+epochs <- 50
 n_lags <- 5
 all_mice_bdlstm <- NULL
 feat_imp <- data.frame("neurons" = as.character(1:122))
@@ -330,8 +330,8 @@ for (mouse in unique(bz_all$df)[1:3]){
 
 ggplot(data = all_mice_bdlstm,aes(x = model_name))+
   geom_errorbar(aes(ymax = model_acc, ymin = zero_rule_acc, x = model_name,y = model_acc),width = 0)+
-  geom_point(aes(y = model_acc, color = "Model Accuracy"), size = 13)+
-  geom_point(aes(y = zero_rule_acc, color = "Zero Rule Accuracy"), size = 13)+
+  geom_point(aes(y = model_acc, color = "Model Accuracy"), size = 3)+
+  geom_point(aes(y = zero_rule_acc, color = "Zero Rule Accuracy"), size = 3)+
   labs(x = "Mouse ID", y = "Accuracy", title = "Accuracy of Test Data for Each Mouse/Model", subtitle= "One Bidirectional LSTM Model fit for each mouse w/ all available neurons", color = "Accuracy")
 
 ```
@@ -460,8 +460,8 @@ ggroc(list("251" = roc_251, "254" = roc_254,
 
 ggplot(data = acc,aes(x = mouse_id))+
   geom_errorbar(aes(ymax = accuracy, ymin = larger_class, x = mouse_id,y = accuracy),width = 0)+
-  geom_point(aes(y = accuracy, color = "Model Accuracy"), size = 13)+
-  geom_point(aes(y = larger_class, color = "Zero Rule Accuracy"), size = 13)+
+  geom_point(aes(y = accuracy, color = "Model Accuracy"), size = 3)+
+  geom_point(aes(y = larger_class, color = "Zero Rule Accuracy"), size = 3)+
   labs(x = "Mouse ID", y = "Accuracy", title = "Accuracy of Test Data for Each Mouse/Model", subtitle= "Where \"Zero Rule\" is always selecting the larger class \nGoal = Model Acc > Zero Rule Acc", color = "Accuracy")
 
 
@@ -519,7 +519,7 @@ history <- model %>%
    metrics = c("accuracy"),
 )%>% 
   fit(X_train, y_train,
-              epochs = 100, 
+              epochs = 50, 
               batch_size = 50,
               validation_split = 0.3, verbose = 0)
 
@@ -547,6 +547,15 @@ rm(result, zero_rule_acc, cm, model, pred, train, test, history, X_test, X_train
 
 ```{r}
 # ##mouse 409
+# mcc <- function(y_true, y_pred){
+# TP <- sum((y_true == 1)&(y_pred == 1))
+# FP <- sum((y_true == 0)&(y_pred == 1))
+# TN <- sum((y_true == 0)&(y_pred == 0))
+# FN <- sum((y_true == 1)&(y_pred == 0))
+# MCC <- ((TP*TN)-(FP*FN))/sqrt((TP+FP)*(TP+FN)*(TN+FP)*(TN+FN))
+# return(1-MCC)
+# }
+# 
 # istrain <- rep(TRUE, round(nrow(data_clean)*0.7/2))
 # istrain <- c(istrain, rep(FALSE,nrow(data_clean)*0.3/2))
 # istrain <- c(istrain,istrain)
@@ -567,41 +576,38 @@ rm(result, zero_rule_acc, cm, model, pred, train, test, history, X_test, X_train
 # y_test <- test %>% select(open)
 # y_test <- as.matrix(y_test)
 # 
-# model <- keras_model_sequential() 
+# model <- keras_model_sequential()
 # 
 # # Add layers to the model
-# model %>% 
-#     layer_dense(units = 100, activation = 'relu', input_shape = c(ncol(X_train))) %>% 
-#     layer_dense(units = 50, activation = 'relu') %>% 
+# model %>%
+#     layer_dense(units = 100, activation = 'relu', input_shape = c(ncol(X_train))) %>%
+#     layer_dense(units = 50, activation = 'relu') %>%
 #     layer_dense(units = 1, activation = 'sigmoid')
 # 
 # 
-# history <- model %>% 
+# history <- model %>%
 #   compile(
-#    loss = "mcc",
+#    loss = mcc,
 #    optimizer = optimizer_rmsprop(),
 #    metrics = c("accuracy"),
-# )%>% 
+# )%>%
 #   fit(X_train, y_train,
-#               epochs = 100, 
+#               epochs = 100,
 #               batch_size = 50,
 #               validation_split = 0.3, verbose = 0)
 # 
 # 
+# history$metrics
+# 
 # pred <- model %>% predict(X_test)
 # pred <- ifelse(pred>=0.5, 1, 0)
-# #plot_model(model )
 # 
-# 
-# #summary(model)
-# 
-# #plot(history)
 # 
 # result <- data.frame(true = factor(y_test), pred = factor(pred))
 # 
 # plot_cm(result = result, title = "Neural Net")
 # all_results <- accuracy_table(result,train_y = y_train,
-#                               title = "Neural Net", 
+#                               title = "Neural Net",
 #                               all_results = all_results)
 # 
 # rm(result, zero_rule_acc, cm, model, pred, train, test, history, X_test, X_train, y_test,y_train, istrain)
@@ -619,7 +625,7 @@ rm(result, zero_rule_acc, cm, model, pred, train, test, history, X_test, X_train
 ##mouse 409
 data_clean <- data_clean %>% mutate(open = as.numeric(open))
 
-for (i in c(1,5)){
+for (i in c(1:5)){
   behav <- c(rep(NA,i), data_clean$open[1:(length(data_clean$open)-i)])
   data_clean_behav <- cbind(behav, data_clean %>% select(-c(open))) %>% na.omit()
 istrain <- rep(TRUE, round(nrow(data_clean_behav)*0.7/2))
@@ -655,7 +661,7 @@ history <- model %>%
    metrics = c("accuracy"),
 )%>% 
   fit(X_train, y_train,
-              epochs = 100, 
+              epochs = 50, 
               batch_size = 50,
               validation_split = 0.3, verbose = 0)
 
@@ -665,7 +671,7 @@ pred <- ifelse(pred>=0.5, 1, 0)
 result <- data.frame(true = factor(y_test), pred = factor(pred))
 
 all_results <- accuracy_table(result,train_y = y_train,
-                              title = paste0("Neural Net with ", i, " Level Shift of Outcome"), 
+                              title = paste0("Neural Net with ", i, " Shift"), 
                               all_results = all_results)
 }
 
@@ -699,7 +705,7 @@ lagm <- function (x, k = 1) {
 }
 
 n_neurons <- 25
-epochs <- 100
+epochs <- 50
 out <- data_prep_lag(data_clean ,n_neurons , random_split = 1)
 xrnn <- out[[1]]
 arframe <-  out[[2]]
@@ -744,7 +750,7 @@ rm(arframe, xdata, epochs, istrain, model, n, n_neurons, xrnn, y_true, ydata, ze
 ```{r}
 n_neurons <- 25
 n_lags <- 5
-epochs <- 100
+epochs <- 50
 out <- data_prep_lag(data_clean ,n_neurons )
 xrnn <- out[[1]]
 arframe <-  out[[2]]
@@ -790,7 +796,7 @@ rm(arframe, xdata, epochs, istrain, model, n, n_lags, n_neurons, xrnn, y_true, y
 
 ### All neurons
 ```{r}
-epochs <- 100
+epochs <- 50
 n_neurons <- ncol(data_clean)-1 
 out <- data_prep_lag(data_clean ,n_neurons )
 xrnn <- out[[1]]
@@ -905,7 +911,7 @@ rm(arframe, xdata, epochs, istrain, model, n, n_lags, n_neurons, xrnn, y_true, y
 
 
 ```{r}
-epochs <- 100
+epochs <- 50
 n_neurons <- 25
 n_lags <- 5
 
