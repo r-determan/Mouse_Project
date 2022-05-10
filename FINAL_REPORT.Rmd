@@ -1,0 +1,11 @@
+---
+title: "Final Report"
+author: "Rose Determan, Shuting Li, Ranfei Xu"
+date: 'May 12, 2022'
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+pacman::p_load(R.matlab, dplyr,tidyr, caret, factoextra, FactoMineR, pROC,stringr,cvms, keras,kerasR,permute)
+```
