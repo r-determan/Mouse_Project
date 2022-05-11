@@ -513,7 +513,13 @@ res %>% select(c(mouse, best_acc, zero_rule_acc, LSTM, BILSTM)) %>% mutate(acros
 ```
 
 
+
 # Conclusions
+One of our main findings was the difference between randomly splitting the data set and "chunking" the training and testing data. When we randomly split the data into training and testing samples, the models have high testing accuracy, but we lose the sequence of the data. This is also allowing the model to learn from things that have already happened, and this might lead to an misleadingly high accuracy. The appendix shows the results of our incorrect model that led to this discovery. 
+
+Another finding is the difference between the LSTM model and the Bidirectional LSTM Model. With the LSTM model, we are assuming that the neurons impact behavior, but with the Bidirectional LSTM Model we allow for the possibility that the behavior influences the neuron activity. In our results, we found that the Bidirectional LSTM model leads to higher prediction accuracy, and this may suggest that behavior influences the neuron activity. 
+
+
 
 # Appendix
 
