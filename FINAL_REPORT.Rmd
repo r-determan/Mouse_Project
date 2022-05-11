@@ -87,6 +87,7 @@ all_results <- data.frame(model_name = NULL,
                           zero_rule_acc = NULL,
                           model_acc = NULL)
 ```
+
 ```{r functions}
 plot_cm <- function(result, title = ""){
   cm <- confusion_matrix(targets =result$true, predictions = result$pred)
@@ -312,7 +313,7 @@ ggplot(data = acc,aes(x = mouse_id))+
 
 rm(cm, comp, eigenvalue, logisROC, mdl_data, mdl_data.pca, mdl_logis, results,
    roc_251, roc_254, roc_255, roc_256,roc_257, roc_258, roc_274, roc_409, roc_412, roc_414, roc_416, roc_417, roc_418, 
-   testing, training, error_rate, id, n_pc, plt, pred_logis, train, acc, bz_all)
+   testing, training, error_rate, id, n_pc, plt, pred_logis, train, acc)
 ```
 
 
@@ -404,14 +405,14 @@ all_results
 #   print(paste(mouse, "start"))
 #   data <- bz_all %>% filter(df == mouse) %>% select(-c(df)) %>% pivot_wider() %>% select(-time)
 #   n_neurons <- ncol(data)-1
-#   
-#   
+# 
+# 
 #   out <- data_prep_lag(data ,n_neurons )
 #   xrnn <- out[[1]]
 #   arframe <-  out[[2]]
 #   istrain <- out[[3]]
 #   ydata <- arframe$open
-#   
+# 
 #   # BIDIRECTIONAL LSTM
 #   model <- keras_model_sequential () %>%
 #     bidirectional(layer_lstm(units = 50, input_shape = list(n_lags , n_neurons))) %>%
@@ -419,23 +420,23 @@ all_results
 #   model %>% compile ( optimizer = optimizer_rmsprop() ,
 #                       loss = "binary_crossentropy",
 #                       metrics = c("accuracy") )
-#   history <- model %>% 
+#   history <- model %>%
 #     fit(xrnn[ istrain , , ] , arframe[ istrain , "open" ] ,
 #         batch_size = 50 , epochs = epochs ,
-#         validation_data = list ( xrnn [! istrain , , ] , arframe [! istrain , "open" ]), 
+#         validation_data = list ( xrnn [! istrain , , ] , arframe [! istrain , "open" ]),
 #         verbose = 0
 #     )
 #   kpred <- predict ( model , xrnn [! istrain , , ])
 #   y_true <- factor(matrix(ydata[!istrain]))
 #   kpred <- factor(round(kpred,0))
-#   
-#   
+# 
+# 
 #   result <- data.frame(true = y_true, pred = kpred)
 #   result$true <- factor(result$true, levels = c(0,1))
 #   result$pred <- factor(result$pred, levels = c(0,1))
-#   
+# 
 #   all_mice_mdl <- accuracy_table(result, train_y = ydata[istrain],paste0("BILSTM_",mouse), all_mice_mdl)
-#   
+# 
 #   # REGULAR LSTM
 #   model <- keras_model_sequential () %>%
 #     layer_lstm(units = 50, input_shape = list(n_lags , n_neurons)) %>%
@@ -443,34 +444,40 @@ all_results
 #   model %>% compile ( optimizer = optimizer_rmsprop() ,
 #                       loss = "binary_crossentropy",
 #                       metrics = c("accuracy") )
-#   history <- model %>% 
+#   history <- model %>%
 #     fit(xrnn[ istrain , , ] , arframe[ istrain , "open" ] ,
 #         batch_size = 50 , epochs = epochs ,
-#         validation_data = list ( xrnn [! istrain , , ] , arframe [! istrain , "open" ]), 
+#         validation_data = list ( xrnn [! istrain , , ] , arframe [! istrain , "open" ]),
 #         verbose = 0
 #     )
 #   kpred <- predict ( model , xrnn [! istrain , , ])
 #   y_true <- factor(matrix(ydata[!istrain]))
 #   kpred <- factor(round(kpred,0))
-#   
-#   
+# 
+# 
 #   result <- data.frame(true = y_true, pred = kpred)
 #   result$true <- factor(result$true, levels = c(0,1))
 #   result$pred <- factor(result$pred, levels = c(0,1))
-#   
+# 
 #   all_mice_mdl <- accuracy_table(result, train_y = ydata[istrain],paste0("LSTM_",mouse), all_mice_mdl)
-#   
-#   
-#   
+# 
+# 
+# 
 #   print(paste(mouse, "end.", Sys.time() - tStart))
-#   
-#   
+# 
+# 
 # }
 # res <- all_mice_mdl
-# write.csv(all_mice_mdl, "final_model_results.csv")
+# res <- res %>% mutate(mouse = str_extract(model_name, "\\d{3}"),
+#                model = str_extract(model_name, "\\w{4,6}(?=_)")) %>% 
+#   select(-c(model_name)) %>% 
+#   pivot_wider(names_from = model, values_from = model_acc)
+# 
+# write.csv(res, "final_model_results.csv")
 
 
 res <- read.csv("final_model_results.csv")
+res$mouse <- as.factor(res$mouse)
 ```
 
 ```{r}
