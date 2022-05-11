@@ -171,12 +171,12 @@ data_prep_lag <- function(data_clean, n_neurons, random_split = 0){
 }
 
 mcc <- function(y_true, y_pred){
- TP <- sum((y_true == 1)&(y_pred == 1))
- FP <- sum((y_true == 0)&(y_pred == 1))
- TN <- sum((y_true == 0)&(y_pred == 0))
- FN <- sum((y_true == 1)&(y_pred == 0))
- MCC <- ((TP*TN)-(FP*FN))/sqrt((TP+FP)*(TP+FN)*(TN+FP)*(TN+FN))
-return(1 - MCC)
+  TP <- sum((y_true == 1)&(y_pred == 1))/1000
+  FP <- sum((y_true == 0)&(y_pred == 1))/1000
+  TN <- sum((y_true == 0)&(y_pred == 0))/1000
+  FN <- sum((y_true == 1)&(y_pred == 0))/1000
+  MCC <- ((TP*TN)-(FP*FN))/sqrt((TP+FP)*(TP+FN)*(TN+FP)*(TN+FN))
+return(MCC)
 }
 ```
 
@@ -313,7 +313,7 @@ ggplot(data = acc,aes(x = mouse_id))+
 
 rm(cm, comp, eigenvalue, logisROC, mdl_data, mdl_data.pca, mdl_logis, results,
    roc_251, roc_254, roc_255, roc_256,roc_257, roc_258, roc_274, roc_409, roc_412, roc_414, roc_416, roc_417, roc_418, 
-   testing, training, error_rate, id, n_pc, plt, pred_logis, train, acc)
+   testing, training, error_rate, id, n_pc, pred_logis, train, acc)
 ```
 
 
@@ -388,6 +388,12 @@ all_results
 
  
 ## LSTM and Bidirectional LSTM
+We were interested in applying the LSTM (long short-term memory) model, since it addresses some of the shortcomings of the RNN structure. Simply, the LSTM model handles long term memory well. Additionally, the LSTM structure includes "gates" that allow the model to remember or forget information.   
+
+We also considered a bidirectional LSTM, since it is unknown whether a neuron's activity impacts behavior or the behavior triggers neuron activity. A bidirectional model is one that is fit both forward (in the typical way that a sequential model is fit) and backward). We believe that is the bidirectional model has a higher accuracy than the traditional model, then there is preliminary evidence to suggest that the behavior impacts neuron activity. 
+
+https://analyticsindiamag.com/complete-guide-to-bidirectional-lstm-with-python-codes/
+
 
 ```{r}
 ### here, we've commented out the model fits, and saved the results in a csv, since
@@ -397,7 +403,7 @@ all_results
 # epochs = 150
 # n_lags <- 5
 # all_mice_mdl<- NULL
-# 
+# mcc_res <- NULL
 # 
 # for (mouse in unique(bz_all$df)){
 #   result <- NULL
@@ -436,6 +442,8 @@ all_results
 #   result$pred <- factor(result$pred, levels = c(0,1))
 # 
 #   all_mice_mdl <- accuracy_table(result, train_y = ydata[istrain],paste0("BILSTM_",mouse), all_mice_mdl)
+#   mcc_res <- rbind(mcc_res, c(paste0("BILSTM_",mouse), mcc(result$true, result$pred)))
+# 
 # 
 #   # REGULAR LSTM
 #   model <- keras_model_sequential () %>%
@@ -460,7 +468,7 @@ all_results
 #   result$pred <- factor(result$pred, levels = c(0,1))
 # 
 #   all_mice_mdl <- accuracy_table(result, train_y = ydata[istrain],paste0("LSTM_",mouse), all_mice_mdl)
-# 
+#   mcc_res <- rbind(mcc_res, c(paste0("LSTM_",mouse), mcc(result$true, result$pred)))
 # 
 # 
 #   print(paste(mouse, "end.", Sys.time() - tStart))
@@ -469,29 +477,39 @@ all_results
 # }
 # res <- all_mice_mdl
 # res <- res %>% mutate(mouse = str_extract(model_name, "\\d{3}"),
-#                model = str_extract(model_name, "\\w{4,6}(?=_)")) %>% 
-#   select(-c(model_name)) %>% 
+#                model = str_extract(model_name, "\\w{4,6}(?=_)")) %>%
+#   select(-c(model_name)) %>%
 #   pivot_wider(names_from = model, values_from = model_acc)
 # 
 # write.csv(res, "final_model_results.csv")
-
-
-res <- read.csv("final_model_results.csv")
-res$mouse <- as.factor(res$mouse)
+# write.csv(mcc_res, "final_model_results_mcc.csv")
 ```
 
 ```{r}
+res <- read.csv("final_model_results.csv")
+res$mouse <- as.factor(res$mouse)
+res <- res %>% mutate(best_acc     = ifelse(zero_rule_acc>BILSTM & zero_rule_acc>LSTM, "Baseline", ifelse(BILSTM>LSTM, "BILSTM", "LSTM")),
+                      best_acc_val = ifelse(zero_rule_acc>BILSTM & zero_rule_acc>LSTM, zero_rule_acc, ifelse(BILSTM>LSTM, BILSTM, LSTM)))
+
+
+
+mcc_res <- read.csv("final_model_results_mcc.csv")
+mcc_res <- mcc_res %>% mutate(mouse = str_extract(V1, "\\d{3}"),
+               model = str_extract(V1, "\\w{4,6}(?=_)")) %>%
+  select(-c(X, V1)) %>%
+  pivot_wider(names_from = model, values_from = V2)
+names(mcc_res) <- c("mouse", "mcc_BILSTM", "mcc_LSTM")
+```
+
+```{r fig.cap="This plot shows the accuracies of each of the three models. The baseline model shows the accuracy when we select the most common class from the training dataset. For 6 of the 13 mice, the baseline model has the highest accuracy, and for 6 mice the bidirectional LSTM model had the highest accuracy. In only one case, the LSTM model had the highest accuracy. "}
 ggplot(data = res, aes(x =mouse))+
   geom_point(mapping = aes(y = zero_rule_acc, color = "Baseline"), size = 3)+
   geom_point(mapping = aes(y = BILSTM, color = "BI-LSTM"), size = 3)+
-  geom_point(mapping = aes(y = LSTM, color = "LSTM"), size = 3)
+  geom_point(mapping = aes(y = LSTM, color = "LSTM"), size = 3)+
+  labs(x = "Mouse", y = "Accuracy", colour = "Model", title = "Comparisons of Accuracies of Models")
 
 
-ggplot(data = all_mice_mdl,aes(x = model_name))+
-  geom_errorbar(aes(ymax = model_acc, ymin = zero_rule_acc, x = model_name,y = model_acc),width = 0)+
-  geom_point(aes(y = model_acc, color = "Model Accuracy"), size = 3)+
-  geom_point(aes(y = zero_rule_acc, color = "Zero Rule Accuracy"), size = 3)+
-  labs(x = "Mouse ID", y = "Accuracy", title = "Accuracy of Test Data for Each Mouse/Model", subtitle= "One Bidirectional LSTM Model fit for each mouse w/ all available neurons", color = "Accuracy")
+res %>% select(c(mouse, best_acc, zero_rule_acc, LSTM, BILSTM)) %>% mutate(across(where(is.numeric),round,3)) %>% knitr::kable(col.names = c("Mouse", "Best Model", "Baseline", "LSTM", "Bi-LSTM"),caption = "Comparisons of accuracies of models")
 ```
 
 
@@ -499,9 +517,8 @@ ggplot(data = all_mice_mdl,aes(x = model_name))+
 
 # Appendix
 
-
 ## Incorrect Version w/ randomly selected train/test : Mouse 409
-**At first, we incorrectly split the training and testing set randomly. The below shows the** ***incorrect*** **model. Interestingly, this incorrectly prepared model performs better than the RNN that is correctly setup in the next section **
+**At first, we incorrectly split the training and testing set randomly. The below shows the** ***incorrect*** **model. Interestingly, this incorrectly prepared model performs better than the RNN that is correctly setup.**
 
 ```{r}
 n_lags <- 5
