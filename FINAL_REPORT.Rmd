@@ -193,11 +193,16 @@ We first focus on the mouse 409 with 25 neurons and extend to all neurons to fin
 - Taking **all neurons** into consideration can improve the predicted accuracy;
 - **Try different lags and Shuffle the behavior:** to explore the causal relationship between neuron activation and behaviors.
 
-# Simple Model (Logistic Regression)
 
+# Simple Model (Logistic Regression)
 
 ## Starting with Mouse 409
 
+We chose logistic regression as our baseline model, considering its simple structure. Firstly, we applied logistic model into one mouse, No.409, to see the model performance.
+
+Because mouse 409 has 110 neurons' recording, to decrease the dimension of our predictors (neurons), we used PCA to extract the main information of our raw data, and then we chose first 25 principle components as our predictors, to fit the logistic model.
+
+Below is our model prediction result on the 30% testing data, setting 0.5 as the threshold of probability that staying closed arm or open arm. From the confusion matrix, we can see the proportion that predictions match real behaviors is around 71.7%.
 ```{r}
 n_pc <- 25
 mdl_data.pca <- PCA(mdl_data[,-1], scale.unit = TRUE, ncp=n_pc, graph = FALSE) #set graph=TRUE can see the arrow plot
@@ -233,7 +238,7 @@ all_results <- accuracy_table(result, training$open,
                               all_results = all_results)
 ```
 
-```{r fig.cap = "Logistic regression confusion matrix for mouse 409. The accuracy of this model is 0.72 compared to the baseline accuracy of 0.75"}
+```{r fig.cap = "Logistic regression confusion matrix for mouse 409. The accuracy of this model is 0.72 compared to the baseline accuracy of 0.75", warning=FALSE}
 plot_cm(result = result, title = "Logistic Reg w/ PCA (first 25 PCs)")
 rm(comp, eigenvalue, mdl_data.pca, mdl_logis, training, testing, error_rate, pred_logis, train)
 ```
@@ -241,7 +246,14 @@ rm(comp, eigenvalue, mdl_data.pca, mdl_logis, training, testing, error_rate, pre
 
 ## All Mice
 
-```{r}
+To explore the performance of logistic model on all mice, we applied logistic model into all mice data separately, with first 25 principle components of each mouse.
+
+After we did prediction for all mice, we combined all results together, and calculated confusion matrix to see the average performance of logistic model. We can see the average accuracy of logistic is around 71.1%.
+
+To identify the model performance difference between mice, we drew ROC curves for all mice, we can see logistic model performance good on mouse 274, but showed worse fitting on mouse 254, mouse 255 and some other mice. 
+
+To see more clearly, we also drew the accuracy comparison plot for all mice. Zero Rule accuracy means the accuracy that we always chose the class has major proportion in our raw data, to compare them with model accuracy, we can easily identify logistic model performance on each mouse.
+```{r, message=FALSE}
 results <- data.frame(pred = NULL, true = NULL, mouse_id = NULL)
 acc <- data.frame(mouse_id = NULL, prop_open = NULL, prop_closed = NULL, larger_class = NULL, accuracy = NULL)
 
@@ -286,7 +298,7 @@ for (id in unique(bz_all$df)){
 acc <- acc%>%  rowwise %>%mutate(larger_class =  max(prop_open, prop_closed))
 ```
 
-```{r fig.cap="Confusion matrix for all mice models. "}
+```{r fig.cap="Confusion matrix for all mice models. ", warning=FALSE}
 # Across ALL models
 cm <- confusion_matrix(predictions = results$pred, targets = results$true)
 
@@ -330,15 +342,18 @@ rm(cm, comp, eigenvalue, logisROC, mdl_data, mdl_data.pca, mdl_logis, results,
 
 # Neural Network Models
 
-## RNN with time lags 
+## Simple Neural Network Models: Mouse 409  
 
 **Reason we try this model: Does the behavior impact neural activity? We assume the past location has influence on the current state of the neurons. **
 
-```{r}
+To improve our prediction accuracy, we tried neural network on mouse 409, this model is more complex and precise than logistic model. Same with logistic, this model use current neuron activities to predict the current mouse location. But the difference is for this model we used all 110 neurons as predictors, because neural network has ability to process big data.
+
+What's more, to identify the question about whether behavior impact neural activity, we explored the relationship between past locations with current neuron activities, the result showed that with 1 and 5 shift forward of location, the model accuracy can be improved a lot, so we assume the past location has influence on the current state of the neurons.
+```{r,message=FALSE}
 ##mouse 409
 #data_clean <- data_clean %>% mutate(open = as.numeric(open))
 
-for (i in c(1,3,5)){
+for (i in c(0,1,3,5)){
   behav <- c(rep(NA,i), data_clean$open[1:(length(data_clean$open)-i)])
   data_clean_behav <- cbind(behav, data_clean %>% select(-c(open))) %>% na.omit()
   istrain <- rep(TRUE, round(nrow(data_clean_behav)*0.7/2))
@@ -393,6 +408,53 @@ rm(result, zero_rule_acc, model, pred, train, test, history, X_test, X_train, y_
 all_results
 ```
 
+## RNN with time lags : Mouse 409
+
+**Reason we try this model: simple neural network doesn't take into account about time series data. **
+
+Because simple neural network model does not take into account about the order of sequence data, we tried RNN model, which is more helpful in modeling sequence data.
+
+The RNN model accuracy on Mouse 409 is around 72.4%, which is 57.7% + 14.7%.
+```{r, warning=FALSE}
+epochs = 150
+n_neurons <- ncol(data_clean)-1 
+out <- data_prep_lag(data_clean ,n_neurons )
+xrnn <- out[[1]]
+arframe <-  out[[2]]
+n_lags <- 5
+istrain <- out[[3]]
+ydata <- arframe$open
+
+
+model <- keras_model_sequential () %>%
+  layer_simple_rnn ( units = 100 , 
+                     input_shape = list (n_lags , n_neurons) ,
+                     activation = "relu") %>%
+  layer_dense ( units = 50, activation = "relu") %>% 
+  layer_dense ( units = 1, activation = "sigmoid")
+model %>% compile ( optimizer = optimizer_rmsprop() ,
+                    loss = "binary_crossentropy",
+                    metrics = c("accuracy") )
+history <- model %>% 
+  fit(xrnn[ istrain , , ] , arframe[ istrain , "open" ] ,
+       batch_size = 50 , epochs = epochs ,
+       validation_data = list ( xrnn [! istrain , , ] , arframe [! istrain , "open" ]), 
+      verbose = 0
+)
+kpred <- predict ( model , xrnn [! istrain , , ])
+y_true <- factor(matrix(ydata[!istrain]))
+kpred <- factor(round(kpred,0))
+
+result <- data.frame(true = y_true, pred = kpred)
+
+
+plot_cm(result = result, title = "Correct RNN")
+all_results <- accuracy_table(result,train_y = ydata[istrain],
+                              title = "Correct RNN", 
+                              all_results = all_results)
+
+rm(arframe, xdata, epochs, istrain, model, n, n_lags, n_neurons, xrnn, y_true, ydata, zero_rule_acc, cm, history, result, kpred)
+```
  
 ## LSTM and Bidirectional LSTM
 We were interested in applying the LSTM (long short-term memory) model, since it addresses some of the shortcomings of the RNN structure. Simply, the LSTM model handles long term memory well. Additionally, the LSTM structure includes "gates" that allow the model to remember or forget information.   
