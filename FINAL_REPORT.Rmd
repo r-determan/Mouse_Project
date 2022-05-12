@@ -102,7 +102,7 @@ plot_cm <- function(result, title = ""){
               palette = "Oranges",
               label = "Total",
               tc_tile_border_color = "black"
-    )) + labs(title = title)
+    )) + labs(title = title) + theme(plot.title.position = "plot", plot.margin = unit(c(0,0,0,0), "cm"))
 }
 
 accuracy_table <- function(result, train_y, title = "",  all_results){
@@ -242,7 +242,7 @@ all_results <- accuracy_table(result, training$open,
 ```
 
 ```{r, fig.cap = "Logistic regression confusion matrix for mouse 409. The accuracy of this model is 0.72 compared to the baseline accuracy of 0.75", warning=FALSE, fig.width=3, fig.height=3,fig.align = "center"}
-plot_cm(result = result, title = "Logistic Reg w/ PCA (first 25 PCs)")
+plot_cm(result = result, title = "Logistic Reg w/ PCA \n(first 25 PCs)")
 rm(comp, eigenvalue, mdl_data.pca, mdl_logis, training, testing, error_rate, pred_logis, train)
 ```
 
@@ -313,7 +313,7 @@ plot_confusion_matrix(cm$`Confusion Matrix`[[1]],
             palette = "Oranges",
             label = "Total",
             tc_tile_border_color = "black"
-  )) + labs(title = "Logistic Reg w/ PCA (all 11 mice/models)")
+  )) + labs(title = "Logistic Reg w/ PCA \n(all 11 mice/models)")
 
 ```
 
@@ -562,22 +562,13 @@ res <- read.csv("final_model_results.csv")
 res$mouse <- as.factor(res$mouse)
 res <- res %>% mutate(best_acc     = ifelse(zero_rule_acc>BILSTM & zero_rule_acc>LSTM, "Baseline", ifelse(BILSTM>LSTM, "BILSTM", "LSTM")),
                       best_acc_val = ifelse(zero_rule_acc>BILSTM & zero_rule_acc>LSTM, zero_rule_acc, ifelse(BILSTM>LSTM, BILSTM, LSTM)))
-
-
-
-mcc_res <- read.csv("final_model_results_mcc.csv")
-mcc_res <- mcc_res %>% mutate(mouse = str_extract(V1, "\\d{3}"),
-               model = str_extract(V1, "\\w{4,6}(?=_)")) %>%
-  select(-c(X, V1)) %>%
-  pivot_wider(names_from = model, values_from = V2)
-names(mcc_res) <- c("mouse", "mcc_BILSTM", "mcc_LSTM")
 ```
 
 ```{r fig.cap="This plot shows the accuracies of each of the three models. The baseline model shows the accuracy when we select the most common class from the training dataset. For 6 of the 13 mice, the baseline model has the highest accuracy, and for 6 mice the bidirectional LSTM model had the highest accuracy. In only one case, the LSTM model had the highest accuracy. "}
 ggplot(data = res, aes(x =mouse))+
-  geom_point(mapping = aes(y = zero_rule_acc, color = "Baseline"), size = 3)+
-  geom_point(mapping = aes(y = BILSTM, color = "BI-LSTM"), size = 3)+
-  geom_point(mapping = aes(y = LSTM, color = "LSTM"), size = 3)+
+  geom_point(mapping = aes(y = zero_rule_acc, color = "Baseline"), size = 1.5)+
+  geom_point(mapping = aes(y = BILSTM, color = "BI-LSTM"), size = 1.5)+
+  geom_point(mapping = aes(y = LSTM, color = "LSTM"), size = 1.5)+
   labs(x = "Mouse", y = "Accuracy", colour = "Model", title = "Comparisons of Accuracies of Models")
 
 
@@ -641,7 +632,7 @@ plot(history)
 
 result <- data.frame(true =y_true, pred = kpred)
 
-plot_cm(result = result, title = "Incorrect RNN w/ 25 Neurons")
+plot_cm(result = result, title = "Incorrect RNN\n w/ 25 Neurons")
 all_results <- accuracy_table(result,train_y = ydata[istrain],
                               title = "Incorrect RNN w/ 25 Neurons", 
                               all_results = all_results)

@@ -368,9 +368,9 @@ names(res)
 
 ```{r}
 ggplot(data = res, aes(x =mouse))+
-  geom_point(mapping = aes(y = zero_rule_acc, color = "Baseline"))+
-  geom_point(mapping = aes(y = BILSTM, color = "BI-LSTM"))+
-  geom_point(mapping = aes(y = LSTM, color = "LSTM"))
+  geom_point(mapping = aes(y = zero_rule_acc, color = "Baseline"), size = 3)+
+  geom_point(mapping = aes(y = BILSTM, color = "BI-LSTM"), size = 3)+
+  geom_point(mapping = aes(y = LSTM, color = "LSTM"), size = 3)
 
 
 ggplot(data = all_mice_mdl,aes(x = model_name))+
