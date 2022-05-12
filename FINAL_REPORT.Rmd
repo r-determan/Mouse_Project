@@ -182,9 +182,16 @@ return(MCC)
 
 # Introduction
 
--- Training/Testing
--- Zero rule accuracy
+Our group focus on the zero maze experiment which record the activation of neurons of each mice in the form of time series and the corresponding  location/behavior. Our goal is to apply different model to find the relationship between neuron activity pattern and behavior of mice.
 
+We first focus on the mouse 409 with 25 neurons and extend to all neurons to find out the best predicted model by comparing confusion matrix for each model we tried. And then we apply the optimal model -  bidirectional LSTM to the data of all neurons of all mice to detect the stability of the model by comparing the accuracy of different mouse. In order to better display the predicted accuracy of bidirectional LSTM,  we also display the Zero Rule Accuracy and LSTM accuracy for all mice.
+
+### Take Away Messages:
+
+- **Training/Test Splitting Matter**: to ensure the sequence of the time series nature, we split the data set into chunks instead of randomly selected;
+- **Zero Rule Accuracy**: to demonstrate the accuracy of each model, we introduce a baseline estimate which refers to zero rule accuracy. Specifically, we select the most common class in the training data set as our predicted value. Then our goal is to make the model accuracy higher than zero rule accuracy;
+- Taking **all neurons** into consideration can improve the predicted accuracy;
+- **Try different lags and Shuffle the behavior:** to explore the causal relationship between neuron activation and behaviors.
 
 # Simple Model (Logistic Regression)
 
